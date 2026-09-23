@@ -57,7 +57,7 @@ export default function Importar() {
     <div className="tarjeta grupo" style={{ maxWidth: 720 }}>
       <h3>Importar «Bitácora de Atención»</h3>
       <p style={{ marginTop: 0 }}>
-        Carga el CSV de la bitácora (separador «;»). Se llenan los campos A–O del reporte (CLIENTE, ESTADO, INFORMA, NUMERO DE SOLICITUD, CEDULA, TELEFONO,
+        Carga el CSV de la bitácora (separador «;»). Se llenan los campos de información del cliente y del crédito (CLIENTE, ESTADO, INFORMA, NUMERO DE SOLICITUD, CEDULA, TELEFONO,
         LUGAR DONDE TRABAJA, FECHA DE FORMALIZADO, TIPO DE CRÉDITO, PROMOTOR, CATEGORIZACIÓN, MODALIDAD). Los demás campos los ingresa el usuario. El archivo
         se procesa en tu navegador y solo se guardan esos campos.
       </p>

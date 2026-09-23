@@ -104,7 +104,7 @@ export default function Graficas() {
               return (
                 <section key={key} className="tarjeta grafica">
                   <h3>{def.caption ?? def.label}</h3>
-                  <div className="sub">Columna {def.col} · {def.label}{top ? ` · top ${top}` : ''} · {total.toLocaleString('es-NI')} respuestas</div>
+                  <div className="sub">{def.label}{top ? ` · top ${top}` : ''} · {total.toLocaleString('es-NI')} respuestas</div>
                   {datos.length === 0 && <div className="sub">Sin datos capturados.</div>}
                   {datos.map(([nombre, n]) => (
                     <div key={nombre} className="barra-fila">

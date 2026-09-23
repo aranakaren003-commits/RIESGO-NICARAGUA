@@ -99,7 +99,6 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
     return (
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
         <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
-          <span className="col">{f.col}</span>
           {f.label}
         </label>
         {f.caption && <div className="pregunta">{f.caption}</div>}
