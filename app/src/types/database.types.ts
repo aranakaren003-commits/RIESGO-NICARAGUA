@@ -56,10 +56,30 @@ export type PerfilUsuario = {
   user_id: string
   email: string | null
   nombre: string | null
-  rol: string
+  id_rol: string
   activo: boolean
   creado_en: string
   actualizado_en: string
+}
+
+export type Rol = {
+  id: string
+  nombre: string
+  descripcion: string | null
+  es_sistema: boolean
+  creado_en: string
+  actualizado_en: string
+}
+
+export type Permiso = {
+  codigo: string
+  modulo: string
+  descripcion: string
+}
+
+export type RolPermiso = {
+  id_rol: string
+  codigo_permiso: string
 }
 
 export type Database = {
@@ -77,11 +97,31 @@ export type Database = {
         Update: Partial<PerfilUsuario>
         Relationships: []
       }
+      roles: {
+        Row: Rol
+        Insert: Partial<Rol> & Pick<Rol, 'nombre'>
+        Update: Partial<Rol>
+        Relationships: []
+      }
+      permisos: {
+        Row: Permiso
+        Insert: Permiso
+        Update: Partial<Permiso>
+        Relationships: []
+      }
+      roles_permisos: {
+        Row: RolPermiso
+        Insert: RolPermiso
+        Update: Partial<RolPermiso>
+        Relationships: []
+      }
     }
     Views: { [_ in never]: never }
     Functions: {
       usuario_activo: { Args: never; Returns: boolean }
       usuario_es_admin: { Args: never; Returns: boolean }
+      tiene_permiso: { Args: { p_codigo: string }; Returns: boolean }
+      mis_permisos: { Args: never; Returns: string[] }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }

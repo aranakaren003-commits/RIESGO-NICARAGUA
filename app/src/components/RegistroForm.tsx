@@ -7,6 +7,7 @@ type Update = Database['public']['Tables']['llamadas_bienvenida']['Update']
 
 interface Props {
   registro: Llamada | null // null = registro nuevo
+  soloLectura: boolean
   onClose: () => void
   onSaved: () => void
 }
@@ -19,7 +20,7 @@ function valorInicial(r: Llamada | null, f: FieldDef): string {
   return String(v)
 }
 
-export default function RegistroForm({ registro, onClose, onSaved }: Props) {
+export default function RegistroForm({ registro, soloLectura, onClose, onSaved }: Props) {
   const [valores, setValores] = useState<Record<string, string>>(() => {
     const ini: Record<string, string> = {}
     for (const g of FIELD_GROUPS) for (const f of g.fields) ini[f.key] = valorInicial(registro, f)
@@ -116,7 +117,7 @@ export default function RegistroForm({ registro, onClose, onSaved }: Props) {
           <div className="espacio" />
           <button className="btn secundario" onClick={onClose}>Cerrar</button>
         </div>
-        <div className="panel-cuerpo">
+        <fieldset className="panel-cuerpo" disabled={soloLectura}>
           {FIELD_GROUPS.map((g) => {
             const origen = g.fields.every((f) => f.source === 'bitacora') ? 'bitacora' : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
             return (
@@ -130,12 +131,13 @@ export default function RegistroForm({ registro, onClose, onSaved }: Props) {
               </section>
             )
           })}
-        </div>
+        </fieldset>
         <div className="panel-pie">
           {error && <div className="aviso error">{error}</div>}
+          {soloLectura && <div className="aviso info">Solo lectura: tu rol no permite modificar registros.</div>}
           <div className="espacio" />
-          <button className="btn secundario" onClick={onClose}>Cancelar</button>
-          <button className="btn" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+          <button className="btn secundario" onClick={onClose}>{soloLectura ? 'Cerrar' : 'Cancelar'}</button>
+          {!soloLectura && <button className="btn" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>}
         </div>
       </div>
     </div>

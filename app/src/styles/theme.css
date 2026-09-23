@@ -100,6 +100,7 @@ tbody tr:hover { background: var(--verde-claro); }
 .panel-cab { background: #fff; padding: 16px 24px; border-bottom: 1px solid var(--gris-borde); display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 2; }
 .panel-cab h2 { font-size: 18px; }
 .panel-cab .espacio { flex: 1; }
+fieldset.panel-cuerpo { border: 0; margin: 0; min-width: 0; }
 .panel-cuerpo { padding: 20px 24px 8px; display: flex; flex-direction: column; gap: 16px; }
 .panel-pie { background: #fff; padding: 14px 24px; border-top: 1px solid var(--gris-borde); display: flex; gap: 10px; align-items: center; position: sticky; bottom: 0; margin-top: auto; }
 .panel-pie .espacio { flex: 1; }
@@ -159,10 +160,32 @@ tbody tr:hover { background: var(--verde-claro); }
 .barra-fila .relleno { height: 100%; background: var(--verde); border-radius: 6px; }
 .barra-fila .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--azul); font-weight: 700; }
 
+/* Administración */
+.pestanas { display: flex; gap: 4px; border-bottom: 2px solid var(--gris-borde); }
+.pestanas button { background: none; border: 0; padding: 10px 18px; font-weight: 700; color: var(--azul-claro); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.pestanas button.activo { color: var(--azul); border-bottom-color: var(--verde); }
+table.sin-clic tbody tr { cursor: default; }
+table.sin-clic tbody tr:hover { background: transparent; }
+table.sin-clic td { overflow: visible; }
+.interruptor { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.interruptor input { width: 16px; height: 16px; accent-color: var(--verde); }
+.roles-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+.lista-roles { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.lista-roles button { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; background: #fff; border: 1px solid var(--gris-borde); border-radius: 8px; padding: 9px 12px; cursor: pointer; font-weight: 600; color: var(--azul); }
+.lista-roles button.activo { border-color: var(--verde); background: var(--verde-claro); }
+.nuevo-rol { display: flex; gap: 8px; }
+.nuevo-rol input { flex: 1; }
+.modulo-permisos { border: 1px solid var(--gris-borde); border-radius: 8px; margin: 0 0 12px; padding: 8px 14px 12px; min-width: 0; }
+.modulo-permisos legend { font-weight: 800; color: var(--azul); padding: 0 6px; font-size: 13px; }
+.permiso { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; cursor: pointer; }
+.permiso input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--verde); }
+.permiso small { display: block; color: var(--azul-claro); font-size: 11px; }
+
 .vacio { padding: 40px; text-align: center; color: var(--azul-claro); }
 
 @media (max-width: 720px) {
   .rejilla { grid-template-columns: 1fr; }
+  .roles-layout { grid-template-columns: 1fr; }
   .header { padding: 0 12px; gap: 8px; }
   .header .usuario span { display: none; }
   .contenedor { padding: 12px; }

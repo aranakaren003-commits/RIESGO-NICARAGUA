@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import { sb } from '../lib/supabase'
 import { ALL_FIELDS, ESTATUS_LLAMADA, encuestaProgreso, fmtFecha } from '../lib/fields'
+import { P, type Permisos } from '../lib/permisos'
 import type { Llamada } from '../types/database.types'
 import RegistroForm from './RegistroForm'
 
@@ -44,7 +45,10 @@ function claseEstatus(e: string | null): string {
   return 'chip neutro'
 }
 
-export default function Registros() {
+export default function Registros({ permisos }: { permisos: Permisos }) {
+  const puedeCrear = permisos.has(P.registrosCrear)
+  const puedeEditar = permisos.has(P.registrosEditar)
+  const puedeExportar = permisos.has(P.registrosExportar)
   const periodos = useMemo(listaPeriodos, [])
   const [filtros, setFiltros] = useState<Filtros>({ periodo: periodos[0], estatus: '', texto: '' })
   const [textoInput, setTextoInput] = useState('')
@@ -131,8 +135,8 @@ export default function Registros() {
           <input placeholder="Cliente, cédula, teléfono, solicitud…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 280 }} />
         </label>
         <div className="espacio" />
-        <button className="btn secundario" onClick={exportar} disabled={exportando || total === 0}>{exportando ? 'Exportando…' : 'Exportar CSV'}</button>
-        <button className="btn" onClick={() => setEditando(null)}>Nuevo registro</button>
+        {puedeExportar && <button className="btn secundario" onClick={exportar} disabled={exportando || total === 0}>{exportando ? 'Exportando…' : 'Exportar CSV'}</button>}
+        {puedeCrear && <button className="btn" onClick={() => setEditando(null)}>Nuevo registro</button>}
       </div>
 
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -196,6 +200,7 @@ export default function Registros() {
         <RegistroForm
           key={editando?.id ?? 'nuevo'}
           registro={editando}
+          soloLectura={editando ? !puedeEditar : !puedeCrear}
           onClose={() => setEditando(undefined)}
           onSaved={() => {
             setEditando(undefined)
