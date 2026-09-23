@@ -13,7 +13,8 @@ export type Llamada = {
   lugar_trabajo: string | null
   fecha_formalizado: string | null
   estatus_llamada: string | null
-  comentario_fecha_hora: string | null
+  comentario_llamada: string | null
+  fecha_hora_llamada: string | null
   tipo_credito: string | null
   promotor: string | null
   categorizacion: string | null

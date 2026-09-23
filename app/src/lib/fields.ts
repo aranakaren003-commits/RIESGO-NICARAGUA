@@ -69,7 +69,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: 'Seguimiento de la llamada',
     fields: [
       f('estatus_llamada', 'J', 'ESTATUS DE LLAMADA', 'select', 'manual', { options: ESTATUS_LLAMADA }),
-      f('comentario_fecha_hora', 'K', 'COMENTARIO, FECHA Y HORA', 'textarea', 'manual'),
+      f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual'),
+      f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
     ],
   },
   {
@@ -162,7 +163,7 @@ export function localInputToIso(v: string): string | null {
 }
 
 export function encuestaProgreso(r: Llamada): { llenos: number; total: number } {
-  const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_fecha_hora')
+  const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_llamada' && x.key !== 'fecha_hora_llamada')
   const llenos = campos.filter((x) => {
     const v = r[x.key]
     return v !== null && v !== ''
