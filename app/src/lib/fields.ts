@@ -1,7 +1,7 @@
 import type { Llamada } from '../types/database.types'
 
 export type FieldKey = Exclude<keyof Llamada, 'id' | 'periodo' | 'creado_por' | 'actualizado_por' | 'creado_en' | 'actualizado_en'>
-export type FieldType = 'text' | 'textarea' | 'select' | 'date' | 'datetime' | 'email' | 'number'
+export type FieldType = 'text' | 'textarea' | 'select' | 'sino' | 'date' | 'datetime' | 'email' | 'number'
 
 export interface FieldDef {
   key: FieldKey
@@ -20,7 +20,6 @@ export interface FieldGroup {
 }
 
 const BMR = ['BUENO', 'REGULAR', 'MALO']
-const SNN = ['SI', 'NO', 'N/A']
 
 const f = (
   key: FieldKey,
@@ -88,23 +87,23 @@ export const FIELD_GROUPS: FieldGroup[] = [
   {
     title: 'Asistencias, documentación y fechas de pago',
     fields: [
-      f('conoce_asistencias', 'W', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'YA CONOCE SOBRE LOS BENEFICIOS ADICIONALES DE NUESTRAS ASISTENCIAS?' }),
-      f('ofrecieron_asistencia', 'X', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'LE OFRECIERON ADQUIRIR ALGUNA ASISTENCIA?' }),
-      f('entregaron_documentacion', 'Y', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'ENTREGARON , LA DOCUMENTACIÓN QUE CORRESPONDE A RESUMEN INFORMATIVO,TABLA DE PAGO Y COPIA DE CONTRATO.' }),
-      f('claro_informacion', 'Z', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'ESTA CLARO CON TODA LA INFORMACIÓN,COMO COMISIÓN ADMINISTRATIVA, FECHAS DE PAGO, INTERÉS, PLAZO.' }),
-      f('conforme_fechas_pago', 'AA', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'ESTA CONFORME CON LAS FECHAS DE PAGOS BRINDADAS' }),
-      f('pregunta_ab', 'AB', 'SI , NO', 'select', 'manual', { options: SNN }),
+      f('conoce_asistencias', 'W', 'SI , NO', 'sino', 'manual', {caption: 'YA CONOCE SOBRE LOS BENEFICIOS ADICIONALES DE NUESTRAS ASISTENCIAS?' }),
+      f('ofrecieron_asistencia', 'X', 'SI , NO', 'sino', 'manual', {caption: 'LE OFRECIERON ADQUIRIR ALGUNA ASISTENCIA?' }),
+      f('entregaron_documentacion', 'Y', 'SI , NO', 'sino', 'manual', {caption: 'ENTREGARON , LA DOCUMENTACIÓN QUE CORRESPONDE A RESUMEN INFORMATIVO,TABLA DE PAGO Y COPIA DE CONTRATO.' }),
+      f('claro_informacion', 'Z', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CLARO CON TODA LA INFORMACIÓN,COMO COMISIÓN ADMINISTRATIVA, FECHAS DE PAGO, INTERÉS, PLAZO.' }),
+      f('conforme_fechas_pago', 'AA', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CONFORME CON LAS FECHAS DE PAGOS BRINDADAS' }),
+      f('pregunta_ab', 'AB', 'SI , NO', 'sino', 'manual'),
     ],
   },
   {
     title: 'Motocicleta y verificación',
     fields: [
       f('nombre_dealer', 'AC', 'NOMBRE DE DEALER', 'text', 'manual', { caption: 'DONDE RETIRO SU MOTOCICLETA?' }),
-      f('pregunta_ad', 'AD', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'YA REALIZO LA LEGALIZACION DE SU MOTO?' }),
-      f('pregunta_ae', 'AE', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'LE ACOMPAÑO A LA LEGALIZACION EL ABOGADO?' }),
-      f('pregunta_af', 'AF', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
-      f('pregunta_ag', 'AG', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'CRÉDITO VERIFICADO' }),
-      f('pregunta_ah', 'AH', 'SI , NO', 'select', 'manual', { options: SNN, caption: 'ANALISTA' }),
+      f('pregunta_ad', 'AD', 'SI , NO', 'sino', 'manual', {caption: 'YA REALIZO LA LEGALIZACION DE SU MOTO?' }),
+      f('pregunta_ae', 'AE', 'SI , NO', 'sino', 'manual', {caption: 'LE ACOMPAÑO A LA LEGALIZACION EL ABOGADO?' }),
+      f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', {caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
+      f('pregunta_ag', 'AG', 'SI , NO', 'sino', 'manual', {caption: 'CRÉDITO VERIFICADO' }),
+      f('pregunta_ah', 'AH', 'SI , NO', 'sino', 'manual', {caption: 'ANALISTA' }),
     ],
   },
   {
@@ -113,7 +112,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('nombre_analista', 'AI', 'NOMBRE ANALISTA', 'text', 'manual'),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
       f('email', 'AK', 'E-MAIL', 'email', 'manual'),
-      f('correo_agre_x_control', 'AL', 'CORREO AGRE X CONTROL', 'select', 'manual', { options: ['SI', 'NO'] }),
+      f('correo_agre_x_control', 'AL', 'CORREO AGRE X CONTROL', 'sino', 'manual'),
       f('sucursal', 'AM', 'SUCURSAL', 'text', 'manual'),
       f('origen', 'AN', 'ORIGEN( LLAMADA, Facebook, Redes, volante etc)', 'text', 'manual', { caption: 'MEDIO DE CAPTACIÓN (POR QUE MEDIO SE ENTERO DE NUESTRO SERVICIO)' }),
       f('fechas_pago', 'AO', 'FECHAS DE PAGO', 'date', 'manual'),

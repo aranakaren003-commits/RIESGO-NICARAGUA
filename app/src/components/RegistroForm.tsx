@@ -76,6 +76,17 @@ export default function RegistroForm({ registro, onClose, onSaved }: Props) {
           {v && !f.options?.includes(v) && <option value={v}>{v}</option>}
         </select>
       )
+    } else if (f.type === 'sino') {
+      control = (
+        <div className="sino" role="group" aria-labelledby={`${id}-lbl`}>
+          {['SI', 'NO'].map((o) => (
+            <label key={o} className="sino-op">
+              <input type="checkbox" checked={v === o} onChange={() => cambia(f.key, v === o ? '' : o)} />
+              {o}
+            </label>
+          ))}
+        </div>
+      )
     } else if (f.type === 'textarea') {
       control = <textarea id={id} rows={3} value={v} onChange={(e) => cambia(f.key, e.target.value)} />
     } else {
@@ -86,7 +97,7 @@ export default function RegistroForm({ registro, onClose, onSaved }: Props) {
     }
     return (
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
-        <label htmlFor={id}>
+        <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
           <span className="col">{f.col}</span>
           {f.label}
         </label>

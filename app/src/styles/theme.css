@@ -112,6 +112,13 @@ tbody tr:hover { background: var(--verde-claro); }
 .campo label { font-weight: 700; font-size: 12px; color: var(--azul); }
 .campo label .col { color: var(--azul-claro); font-weight: 500; margin-right: 4px; }
 .campo .pregunta { font-size: 11.5px; color: var(--azul-claro); line-height: 1.3; }
+.sino { display: flex; gap: 10px; }
+.campo .sino-op {
+  display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--gris-texto);
+  border: 1px solid var(--gris-borde); border-radius: 8px; padding: 8px 16px; background: #fff; cursor: pointer;
+}
+.campo .sino-op:has(input:checked) { border-color: var(--verde); background: var(--verde-claro); color: #23591a; }
+.sino-op input { width: 16px; height: 16px; accent-color: var(--verde); margin: 0; }
 .etiqueta-origen { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
 .etiqueta-origen.bitacora { background: #e3e9f2; color: var(--azul); }
 .etiqueta-origen.manual { background: var(--verde-claro); color: #23591a; }
