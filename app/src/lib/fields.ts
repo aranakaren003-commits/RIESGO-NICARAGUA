@@ -14,9 +14,18 @@ export interface FieldDef {
   readOnly?: boolean
 }
 
+export type TipoProducto = 'moto' | 'pyme'
+
 export interface FieldGroup {
   title: string
   fields: FieldDef[]
+  aplicaA?: TipoProducto // la sección solo se activa para este tipo de producto
+  obligatorioEn?: TipoProducto // los campos de la sección son obligatorios para este tipo de producto
+}
+
+// TIPO DE CRÉDITO en la bitácora: 'MOTO', 'PYMES', 'ASALARIADO', etc.
+export function esProducto(tipoCredito: string | null | undefined, tipo: TipoProducto): boolean {
+  return (tipoCredito ?? '').trim().toUpperCase().startsWith(tipo === 'moto' ? 'MOTO' : 'PYME')
 }
 
 const BMR = ['BUENO', 'REGULAR', 'MALO']
@@ -95,19 +104,26 @@ export const FIELD_GROUPS: FieldGroup[] = [
     ],
   },
   {
-    title: 'Motocicleta y verificación',
+    title: 'Motocicleta',
+    aplicaA: 'moto',
     fields: [
       f('nombre_dealer', 'AC', 'NOMBRE DE DEALER', 'text', 'manual', { caption: 'DONDE RETIRO SU MOTOCICLETA?' }),
-      f('pregunta_ad', 'AD', 'SI , NO', 'sino', 'manual', {caption: 'YA REALIZO LA LEGALIZACION DE SU MOTO?' }),
-      f('pregunta_ae', 'AE', 'SI , NO', 'sino', 'manual', {caption: 'LE ACOMPAÑO A LA LEGALIZACION EL ABOGADO?' }),
-      f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', {caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
-      f('pregunta_ag', 'AG', 'SI , NO', 'sino', 'manual', {caption: 'CRÉDITO VERIFICADO' }),
-      f('pregunta_ah', 'AH', 'SI , NO', 'sino', 'manual', {caption: 'ANALISTA' }),
+      f('pregunta_ad', 'AD', 'SI , NO', 'sino', 'manual', { caption: 'YA REALIZO LA LEGALIZACION DE SU MOTO?' }),
+      f('pregunta_ae', 'AE', 'SI , NO', 'sino', 'manual', { caption: 'LE ACOMPAÑO A LA LEGALIZACION EL ABOGADO?' }),
+    ],
+  },
+  {
+    title: 'Verificación',
+    obligatorioEn: 'pyme',
+    fields: [
+      f('pregunta_ag', 'AG', 'SI , NO', 'sino', 'manual', { caption: 'CRÉDITO VERIFICADO' }),
+      f('pregunta_ah', 'AH', 'SI , NO', 'sino', 'manual', { caption: 'ANALISTA' }),
     ],
   },
   {
     title: 'Cierre y observaciones',
     fields: [
+      f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
       f('nombre_analista', 'AI', 'NOMBRE ANALISTA', 'text', 'manual'),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
       f('email', 'AK', 'E-MAIL', 'email', 'manual'),

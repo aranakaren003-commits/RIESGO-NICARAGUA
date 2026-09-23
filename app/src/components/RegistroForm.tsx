@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { sb } from '../lib/supabase'
-import { FIELD_GROUPS, isoToLocalInput, localInputToIso, type FieldDef } from '../lib/fields'
+import { FIELD_GROUPS, esProducto, isoToLocalInput, localInputToIso, type FieldDef } from '../lib/fields'
 import type { Database, Llamada } from '../types/database.types'
 
 type Update = Database['public']['Tables']['llamadas_bienvenida']['Update']
@@ -38,12 +38,22 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
     if (!cliente) return setError('CLIENTE es obligatorio.')
     if (!Number.isInteger(solicitud) || solicitud <= 0) return setError('NUMERO DE SOLICITUD debe ser un número entero positivo.')
 
+    const faltan: string[] = []
+    for (const g of FIELD_GROUPS) {
+      if (g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)) {
+        for (const f of g.fields) if (!valores[f.key]) faltan.push(f.caption ?? f.label)
+      }
+    }
+    if (faltan.length) return setError(`Obligatorio para este tipo de crédito: ${faltan.join(' · ')}.`)
+
     const payload: Record<string, string | number | null> = {}
     for (const g of FIELD_GROUPS) {
+      const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
       for (const f of g.fields) {
         if (f.readOnly) continue
         const v = valores[f.key].trim()
-        if (f.key === 'numero_solicitud') payload[f.key] = solicitud
+        if (!aplica) payload[f.key] = null // sección que no aplica al producto: se deja vacía
+        else if (f.key === 'numero_solicitud') payload[f.key] = solicitud
         else if (f.type === 'datetime') payload[f.key] = localInputToIso(valores[f.key])
         else payload[f.key] = v === '' ? null : v
       }
@@ -64,7 +74,7 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
     onSaved()
   }
 
-  function campo(f: FieldDef) {
+  function campo(f: FieldDef, obligatorio = false) {
     const id = `f-${f.key}`
     const v = valores[f.key]
     const bloqueado = f.readOnly || (f.key === 'numero_solicitud' && !!registro)
@@ -100,6 +110,7 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
         <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
           {f.label}
+          {obligatorio && <span className="req" title="Obligatorio"> *</span>}
         </label>
         {f.caption && <div className="pregunta">{f.caption}</div>}
         {control}
@@ -119,14 +130,20 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
         <fieldset className="panel-cuerpo" disabled={soloLectura}>
           {FIELD_GROUPS.map((g) => {
             const origen = g.fields.every((f) => f.source === 'bitacora') ? 'bitacora' : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
+            const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
+            const obligatorio = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
             return (
-              <section key={g.title} className="tarjeta grupo">
+              <section key={g.title} className={`tarjeta grupo${aplica ? '' : ' inactivo'}`}>
                 <h3>
                   {g.title}
                   {origen === 'bitacora' && <span className="etiqueta-origen bitacora">Desde bitácora · editable</span>}
                   {origen === 'manual' && <span className="etiqueta-origen manual">Ingreso del usuario</span>}
+                  {g.aplicaA && !aplica && <span className="etiqueta-origen bitacora">Solo aplica a créditos de tipo {g.aplicaA.toUpperCase()}</span>}
+                  {obligatorio && <span className="etiqueta-origen obligatorio">Obligatorio para {g.obligatorioEn?.toUpperCase()}</span>}
                 </h3>
-                <div className="rejilla">{g.fields.map(campo)}</div>
+                <fieldset className="sin-borde" disabled={!aplica}>
+                  <div className="rejilla">{g.fields.map((f) => campo(f, obligatorio))}</div>
+                </fieldset>
               </section>
             )
           })}
