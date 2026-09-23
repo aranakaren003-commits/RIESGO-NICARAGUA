@@ -92,7 +92,6 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('entregaron_documentacion', 'Y', 'SI , NO', 'sino', 'manual', {caption: 'ENTREGARON , LA DOCUMENTACIÓN QUE CORRESPONDE A RESUMEN INFORMATIVO,TABLA DE PAGO Y COPIA DE CONTRATO.' }),
       f('claro_informacion', 'Z', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CLARO CON TODA LA INFORMACIÓN,COMO COMISIÓN ADMINISTRATIVA, FECHAS DE PAGO, INTERÉS, PLAZO.' }),
       f('conforme_fechas_pago', 'AA', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CONFORME CON LAS FECHAS DE PAGOS BRINDADAS' }),
-      f('pregunta_ab', 'AB', 'SI , NO', 'sino', 'manual'),
     ],
   },
   {
