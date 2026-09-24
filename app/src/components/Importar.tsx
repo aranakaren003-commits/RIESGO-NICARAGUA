@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { sb } from '../lib/supabase'
-import { leerBitacora, type ResultadoLectura } from '../lib/bitacora'
+import { ESTADOS_IMPORTABLES, leerBitacora, type ResultadoLectura } from '../lib/bitacora'
 
 const LOTE = 500
 
 export default function Importar() {
-  const [soloFormalizados, setSoloFormalizados] = useState(true)
-  const [texto, setTexto] = useState<string | null>(null)
   const [archivo, setArchivo] = useState('')
   const [lectura, setLectura] = useState<ResultadoLectura | null>(null)
   const [trabajando, setTrabajando] = useState(false)
@@ -19,14 +17,7 @@ export default function Importar() {
     setError('')
     setResultado('')
     setArchivo(f.name)
-    const t = await f.text()
-    setTexto(t)
-    setLectura(leerBitacora(t, soloFormalizados))
-  }
-
-  function cambiaFiltro(v: boolean) {
-    setSoloFormalizados(v)
-    if (texto) setLectura(leerBitacora(texto, v))
+    setLectura(leerBitacora(await f.text()))
   }
 
   async function importar() {
@@ -64,15 +55,17 @@ export default function Importar() {
       <div className="barra">
         <input type="file" accept=".csv,text/csv" onChange={elegir} />
       </div>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="checkbox" checked={soloFormalizados} onChange={(e) => cambiaFiltro(e.target.checked)} />
-        Solo créditos con FECHA DE FORMALIZADO (recomendado)
-      </label>
+      <div className="aviso info" style={{ marginBottom: 12 }}>
+        Solo se importan los créditos con ESTADO: {ESTADOS_IMPORTABLES.map((e) => e.toLowerCase()).join(', ')}. El resto se omite.
+      </div>
 
       {lectura && (
         <div className="aviso info" style={{ marginBottom: 12 }}>
           <strong>{archivo}</strong>: {lectura.totalFilas.toLocaleString('es-NI')} filas leídas · {lectura.elegibles.length.toLocaleString('es-NI')} a importar ·{' '}
-          {lectura.sinFormalizar.toLocaleString('es-NI')} sin formalizar (omitidas) · {lectura.duplicadosEnArchivo} duplicadas en el archivo · {lectura.sinDatos} sin número de solicitud o cliente.
+          {lectura.fueraDeEstado.toLocaleString('es-NI')} omitidas por ESTADO · {lectura.duplicadosEnArchivo} duplicadas en el archivo · {lectura.sinDatos} sin número de solicitud o cliente.
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {Object.entries(lectura.porEstado).map(([e, n]) => <li key={e}>{e}: {n.toLocaleString('es-NI')}</li>)}
+          </ul>
         </div>
       )}
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}

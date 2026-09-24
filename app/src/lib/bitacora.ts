@@ -3,10 +3,24 @@ import type { Database } from '../types/database.types'
 
 type Insert = Database['public']['Tables']['llamadas_bienvenida']['Insert']
 
+// Solo se importan los créditos en estos ESTADOS de la bitácora (comparación sin acentos ni mayúsculas).
+export const ESTADOS_IMPORTABLES = [
+  'FORMALIZADO',
+  'AUDITADO',
+  'EXPEDIENTE COMPLETO',
+  'EXPEDIENTE INCOMPLETO',
+  'EXPEDIENTE CORREGIDO ASESOR',
+  'EXPEDIENTE INSCRIPCION PRENDARIA',
+]
+
+const normaliza = (s: string): string =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+
 export interface ResultadoLectura {
   totalFilas: number
   elegibles: Insert[]
-  sinFormalizar: number
+  porEstado: Record<string, number> // elegibles por ESTADO
+  fueraDeEstado: number
   duplicadosEnArchivo: number
   sinDatos: number
 }
@@ -26,10 +40,10 @@ function fechaAIso(v: string | undefined): string | null {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}-06:00`
 }
 
-export function leerBitacora(texto: string, soloFormalizados: boolean): ResultadoLectura {
+export function leerBitacora(texto: string): ResultadoLectura {
   const parsed = Papa.parse<Record<string, string>>(texto, { header: true, delimiter: ';', skipEmptyLines: true })
   const vistos = new Set<number>()
-  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], sinFormalizar: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
+  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], porEstado: {}, fueraDeEstado: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
 
   for (const r of parsed.data) {
     const solicitud = Number((r['Num Solicitud'] ?? '').trim())
@@ -38,16 +52,18 @@ export function leerBitacora(texto: string, soloFormalizados: boolean): Resultad
       res.sinDatos++
       continue
     }
-    const fecha = fechaAIso(r['Fecha Formalizado'])
-    if (soloFormalizados && !fecha) {
-      res.sinFormalizar++
+    const estadoNorm = normaliza(r['Estado'] ?? '')
+    if (!ESTADOS_IMPORTABLES.includes(estadoNorm)) {
+      res.fueraDeEstado++
       continue
     }
+    const fecha = fechaAIso(r['Fecha Formalizado'])
     if (vistos.has(solicitud)) {
       res.duplicadosEnArchivo++
       continue
     }
     vistos.add(solicitud)
+    res.porEstado[estadoNorm] = (res.porEstado[estadoNorm] ?? 0) + 1
 
     const comprobante = limpia(r['Comprobante'])
     const consecutivo = limpia(r['Consecutivo'])
