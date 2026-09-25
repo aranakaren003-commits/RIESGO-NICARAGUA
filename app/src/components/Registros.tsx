@@ -163,9 +163,12 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
               {filas.map((r) => {
                 const p = encuestaProgreso(r)
                 return (
-                  <tr key={r.id} onClick={() => setEditando(r)}>
+                  <tr key={r.id} className={r.caso_sospecha === 'SI' ? 'fila-sospecha' : ''} onClick={() => setEditando(r)}>
                     <td>{r.num}</td>
-                    <td title={r.cliente}>{r.cliente}</td>
+                    <td title={r.cliente}>
+                      {r.cliente}
+                      {r.caso_sospecha === 'SI' && <span className="chip mal" style={{ marginLeft: 8 }}>Sospecha</span>}
+                    </td>
                     <td>{r.estado}</td>
                     <td>{r.numero_solicitud}</td>
                     <td>{r.tipo_credito}</td>

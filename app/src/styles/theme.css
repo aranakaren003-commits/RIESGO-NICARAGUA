@@ -187,6 +187,22 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .estatus-select.con-estatus { color: var(--azul); background: #e3e9f2; }
 .btn.mini { padding: 4px 8px; font-size: 12px; }
 
+/* Resaltados de la cola y las tablas: sospecha (rojo tenue) y devolver llamada vigente (amarillo) */
+tbody tr.fila-sospecha td { background: #fde3e5; }
+tbody tr.fila-sospecha:hover td { background: #fbd0d4; }
+tbody tr.fila-devolver td { background: #fff3a8; }
+tbody tr.fila-devolver:hover td { background: #ffec7a; }
+.devolver-hora { font-size: 12px; font-weight: 700; color: var(--azul); white-space: nowrap; }
+.devolver-hora.ya { background: #ffe066; padding: 2px 8px; border-radius: 999px; }
+.leyenda-cola { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--azul-claro); }
+.leyenda-cola .muestra { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--gris-borde); margin-right: -10px; }
+.leyenda-cola .muestra.devolver { background: #fff3a8; }
+.leyenda-cola .muestra.sospecha { background: #fde3e5; }
+.segmentos { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--gris-borde); border-radius: 8px; overflow: hidden; background: #fff; align-self: end; }
+.segmentos button { background: none; border: 0; border-right: 1px solid var(--gris-borde); padding: 9px 14px; font-weight: 700; color: var(--azul-claro); cursor: pointer; }
+.segmentos button:last-child { border-right: 0; }
+.segmentos button.activo { background: var(--azul); color: #fff; }
+
 /* Administración de usuarios */
 .barra-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--gris-borde); }
 .barra-acciones .espacio { flex: 1; }

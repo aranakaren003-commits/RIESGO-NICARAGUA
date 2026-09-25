@@ -10,8 +10,9 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
-  source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora (editable); manual = lo ingresa el usuario
+  source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora (editable salvo readOnly); manual = lo ingresa el usuario
   readOnly?: boolean
+  visibleSi?: { campo: FieldKey; valor: string } // el campo solo aparece (y es obligatorio) cuando otro campo tiene ese valor
 }
 
 export type TipoProducto = 'moto' | 'pyme'
@@ -44,6 +45,7 @@ export const ESTATUS_LLAMADA = [
   'NO ACEPTACION',
   'NO CONTESTA',
   'BUZON',
+  'DEVOLVER LLAMADA',
   'NO FORMALIZA',
   'DUPLICADO',
   'ANULADO',
@@ -71,7 +73,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('estatus_llamada', 'J', 'ESTATUS DE LLAMADA', 'select', 'manual', { options: ESTATUS_LLAMADA }),
       // Se fija sola la primera vez que se abre el registro (hora del país) y no se puede modificar
       f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual', { readOnly: true }),
-      f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
+      // La llamada se devolverá en esta fecha y hora: la línea sube en la cola desde 5 minutos antes
+      f('devolver_llamada_en', '', 'FECHA Y HORA PARA DEVOLVER LA LLAMADA', 'datetime', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'DEVOLVER LLAMADA' } }),
     ],
   },
   {
@@ -100,6 +103,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
     fields: [
       f('conoce_asistencias', 'W', 'SI , NO', 'sino', 'manual', {caption: 'YA CONOCE SOBRE LOS BENEFICIOS ADICIONALES DE NUESTRAS ASISTENCIAS?' }),
       f('ofrecieron_asistencia', 'X', 'SI , NO', 'sino', 'manual', {caption: 'LE OFRECIERON ADQUIRIR ALGUNA ASISTENCIA?' }),
+      f('adquirio_asistencia', '', 'SI , NO', 'sino', 'manual', { caption: 'ADQUIRIÓ LA ASISTENCIA?' }),
       f('entregaron_documentacion', 'Y', 'SI , NO', 'sino', 'manual', {caption: 'ENTREGARON , LA DOCUMENTACIÓN QUE CORRESPONDE A RESUMEN INFORMATIVO,TABLA DE PAGO Y COPIA DE CONTRATO.' }),
       f('claro_informacion', 'Z', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CLARO CON TODA LA INFORMACIÓN,COMO COMISIÓN ADMINISTRATIVA, FECHAS DE PAGO, INTERÉS, PLAZO.' }),
       f('conforme_fechas_pago', 'AA', 'SI , NO', 'sino', 'manual', {caption: 'ESTA CONFORME CON LAS FECHAS DE PAGOS BRINDADAS' }),
@@ -126,12 +130,12 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: 'Cierre y observaciones',
     fields: [
       f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
-      f('nombre_analista', 'AI', 'NOMBRE ANALISTA', 'text', 'manual'),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
-      f('email', 'AK', 'E-MAIL', 'email', 'manual'),
+      // E-MAIL, SUCURSAL y ORIGEN vienen de la bitácora (Correo_MK, Suc Origen, Medio Captacion); el correo se puede editar, los otros dos no
+      f('email', 'AK', 'E-MAIL', 'email', 'bitacora'),
       f('correo_agre_x_control', 'AL', 'CORREO AGRE X CONTROL', 'sino', 'manual'),
-      f('sucursal', 'AM', 'SUCURSAL', 'text', 'manual'),
-      f('origen', 'AN', 'ORIGEN( LLAMADA, Facebook, Redes, volante etc)', 'text', 'manual', { caption: 'MEDIO DE CAPTACIÓN (POR QUE MEDIO SE ENTERO DE NUESTRO SERVICIO)' }),
+      f('sucursal', 'AM', 'SUCURSAL', 'text', 'bitacora', { readOnly: true }),
+      f('origen', 'AN', 'ORIGEN( LLAMADA, Facebook, Redes, volante etc)', 'text', 'bitacora', { readOnly: true, caption: 'MEDIO DE CAPTACIÓN (POR QUE MEDIO SE ENTERO DE NUESTRO SERVICIO)' }),
       f('fechas_pago', 'AO', 'FECHAS DE PAGO', 'date', 'manual'),
       f('no_conforme_fechas_pago', 'AP', 'NO CONFORME CON FECHAS DE PAGO', 'textarea', 'manual', { caption: 'OBSERVACIONES/ COMENTARIO' }),
       f('medio_notificacion', 'AQ', 'SMS- CORREO- WHATSAPP-LLAMADA', 'select', 'manual', {
@@ -140,13 +144,21 @@ export const FIELD_GROUPS: FieldGroup[] = [
       }),
     ],
   },
+  {
+    title: 'Comentario y sospecha',
+    fields: [
+      f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
+      // Si es SI, la línea se resalta en rojo tenue en las tablas y queda disponible para análisis por promotor, canal y solicitud
+      f('caso_sospecha', '', 'CASO TIENE SOSPECHA', 'sino', 'manual'),
+    ],
+  },
 ]
 
 export const ALL_FIELDS: FieldDef[] = FIELD_GROUPS.flatMap((g) => g.fields)
 export const MANUAL_FIELDS = ALL_FIELDS.filter((x) => x.source === 'manual')
 
 export function encuestaProgreso(r: Llamada): { llenos: number; total: number } {
-  const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_llamada' && x.key !== 'fecha_hora_llamada')
+  const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_llamada' && x.key !== 'fecha_hora_llamada' && x.key !== 'devolver_llamada_en' && x.key !== 'caso_sospecha')
   const llenos = campos.filter((x) => {
     const v = r[x.key]
     return v !== null && v !== ''

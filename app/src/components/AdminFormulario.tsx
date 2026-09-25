@@ -63,7 +63,7 @@ export default function AdminFormulario({ paises, miPerfil, onError }: { paises:
         <div className="vacio">Cargando…</div>
       ) : (
         FIELD_GROUPS.map((g) => {
-          const editables = g.fields.filter((f) => !f.readOnly && f.key !== 'estatus_llamada')
+          const editables = g.fields.filter((f) => !f.readOnly && !f.visibleSi && f.key !== 'estatus_llamada')
           if (editables.length === 0) return null
           return (
             <fieldset key={g.title} className="modulo-permisos tarjeta" style={{ padding: '8px 16px 12px', background: '#fff' }}>

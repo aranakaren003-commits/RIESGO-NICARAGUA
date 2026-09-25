@@ -8,7 +8,8 @@ import type { Database, Llamada } from '../types/database.types'
 type Update = Database['public']['Tables']['llamadas_bienvenida']['Update']
 type Insert = Database['public']['Tables']['llamadas_bienvenida']['Insert']
 
-const ESTATUS_FINAL = ['ACEPTACION', 'NO ACEPTACION']
+// Resultados posibles cuando el cliente contesta (el Digitador elige uno; DEVOLVER LLAMADA exige fecha y hora)
+const ESTATUS_FINAL = ['ACEPTACION', 'NO ACEPTACION', 'DEVOLVER LLAMADA']
 
 interface Props {
   registro: Llamada | null // null = registro nuevo
@@ -52,8 +53,11 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
 
   const cambia = (k: string, v: string) => setValores((p) => ({ ...p, [k]: v }))
 
+  // Un campo condicional (p. ej. la fecha para devolver la llamada) solo se muestra cuando otro campo tiene cierto valor
+  const visible = (f: FieldDef) => !f.visibleSi || valores[f.visibleSi.campo] === f.visibleSi.valor
+
   const esObligatorio = (f: FieldDef, grupoPide: boolean) =>
-    !f.readOnly && (grupoPide || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada'))
+    !f.readOnly && visible(f) && (grupoPide || !!f.visibleSi || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada'))
 
   async function guardar() {
     setError('')
@@ -77,7 +81,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
       for (const f of g.fields) {
         if (f.readOnly) continue
         const v = valores[f.key].trim()
-        if (!aplica) payload[f.key] = null // sección que no aplica al producto: se deja vacía
+        if (!aplica || !visible(f)) payload[f.key] = null // sección que no aplica al producto o campo condicional oculto: se deja vacío
         else if (f.key === 'numero_solicitud') payload[f.key] = solicitud
         else if (f.type === 'datetime') payload[f.key] = localInputToIso(valores[f.key], tz)
         else payload[f.key] = v === '' ? null : v
@@ -192,7 +196,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
                   {grupoPide && <span className="etiqueta-origen obligatorio">Obligatorio para {g.obligatorioEn?.toUpperCase()}</span>}
                 </h3>
                 <fieldset className="sin-borde" disabled={!aplica}>
-                  <div className="rejilla">{g.fields.map((f) => campo(f, aplica && esObligatorio(f, grupoPide)))}</div>
+                  <div className="rejilla">{g.fields.filter(visible).map((f) => campo(f, aplica && esObligatorio(f, grupoPide)))}</div>
                 </fieldset>
               </section>
             )

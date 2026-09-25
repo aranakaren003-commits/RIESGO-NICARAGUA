@@ -12,12 +12,24 @@ interface Abierto {
   intentoId: string | null
 }
 
+// Segmentación por estatus de llamada ('' = todos, 'sin' = sin asignar)
+const SEGMENTOS: { valor: string; titulo: string }[] = [
+  { valor: '', titulo: 'Todos' },
+  { valor: 'sin', titulo: 'Sin asignar' },
+  { valor: 'NO CONTESTA', titulo: 'No contesta' },
+  { valor: 'BUZON', titulo: 'Buzón' },
+  { valor: 'DEVOLVER LLAMADA', titulo: 'Devolver llamada' },
+]
+
+const REFRESCO_MS = 60_000 // las devoluciones de llamada suben en la cola conforme se acerca su hora
+
 // Cola de trabajo del Digitador: solo líneas sin gestionar. Cada selección de la lista es un intento.
 export default function Gestion() {
   const { pais } = usePais()
   const tz = pais.zona_horaria
   const [texto, setTexto] = useState('')
   const [textoInput, setTextoInput] = useState('')
+  const [segmento, setSegmento] = useState('')
   const [pagina, setPagina] = useState(0)
   const [filas, setFilas] = useState<VCola[]>([])
   const [total, setTotal] = useState(0)
@@ -50,8 +62,11 @@ export default function Gestion() {
     let q = sb.from('v_cola_llamadas').select('*', { count: 'exact' }).eq('id_pais', pais.id)
     const t = texto.trim()
     if (t) q = q.ilike('cedula', `%${t}%`)
+    if (segmento === 'sin') q = q.is('estatus_llamada', null)
+    else if (segmento) q = q.eq('estatus_llamada', segmento)
     const { data, count, error } = await q
       .order('orden_estatus', { ascending: true })
+      .order('devolver_llamada_en', { ascending: true, nullsFirst: false })
       .order('fecha_formalizado', { ascending: true, nullsFirst: false })
       .order('intentos', { ascending: true })
       .range(pagina * TAM, pagina * TAM + TAM - 1)
@@ -59,11 +74,17 @@ export default function Gestion() {
     setFilas(data ?? [])
     setTotal(count ?? 0)
     setCargando(false)
-  }, [pais.id, texto, pagina])
+  }, [pais.id, texto, segmento, pagina])
 
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  useEffect(() => {
+    if (abierto) return // no se recarga la cola mientras se llena un formulario
+    const id = setInterval(cargar, REFRESCO_MS)
+    return () => clearInterval(id)
+  }, [cargar, abierto])
 
   async function registrar(fila: VCola, resultado: 'NO CONTESTA' | 'BUZON' | 'CONTESTA') {
     setError('')
@@ -93,8 +114,23 @@ export default function Gestion() {
       <div className="barra">
         <label>
           Buscar cédula
-          <input placeholder="Cédula…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 260 }} />
+          <input placeholder="Cédula…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 220 }} />
         </label>
+        <div className="segmentos" role="group" aria-label="Estatus de llamada">
+          {SEGMENTOS.map((s) => (
+            <button
+              key={s.valor || 'todos'}
+              className={segmento === s.valor ? 'activo' : ''}
+              aria-pressed={segmento === s.valor}
+              onClick={() => {
+                setSegmento(s.valor)
+                setPagina(0)
+              }}
+            >
+              {s.titulo}
+            </button>
+          ))}
+        </div>
         <div className="espacio" />
         <button className="btn" onClick={() => setAbierto({ registro: null, intentoId: null })} disabled={!idCarga} title={!idCarga ? 'No hay cargas de la bitácora en este país' : undefined}>
           Nuevo registro
@@ -102,6 +138,11 @@ export default function Gestion() {
       </div>
 
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
+
+      <div className="leyenda-cola">
+        <span className="muestra devolver" /> Devolver llamada vigente (desde 5 minutos antes de la hora acordada)
+        <span className="muestra sospecha" /> Caso con sospecha
+      </div>
 
       <div className="tarjeta">
         <div className="tabla-envoltorio">
@@ -118,8 +159,11 @@ export default function Gestion() {
             </thead>
             <tbody>
               {filas.map((f) => (
-                <tr key={f.id}>
-                  <td title={f.cliente}>{f.cliente}</td>
+                <tr key={f.id} className={f.caso_sospecha === 'SI' ? 'fila-sospecha' : f.orden_estatus === 0 ? 'fila-devolver' : ''}>
+                  <td title={f.cliente}>
+                    {f.cliente}
+                    {f.caso_sospecha === 'SI' && <span className="chip mal" style={{ marginLeft: 8 }}>Sospecha</span>}
+                  </td>
                   <td>{f.tipo_credito}</td>
                   <td>{f.telefono}</td>
                   <td>{fmtFechaHora(f.fecha_formalizado, tz)}</td>
@@ -132,12 +176,18 @@ export default function Gestion() {
                         aria-label={`Estatus de llamada de ${f.cliente}`}
                         onChange={(e) => registrar(f, e.target.value as 'NO CONTESTA' | 'BUZON' | 'CONTESTA')}
                       >
-                        <option value="" disabled>Sin estatus</option>
+                        <option value="" disabled>Sin asignar</option>
                         <option value="NO CONTESTA">NO CONTESTA</option>
                         <option value="BUZON">BUZON</option>
                         <option value="CONTESTA">CONTESTA</option>
+                        {f.estatus_llamada === 'DEVOLVER LLAMADA' && <option value="DEVOLVER LLAMADA" disabled>DEVOLVER LLAMADA</option>}
                       </select>
-                      {f.estatus_llamada && (
+                      {f.estatus_llamada === 'DEVOLVER LLAMADA' && f.devolver_llamada_en && (
+                        <span className={`devolver-hora${f.orden_estatus === 0 ? ' ya' : ''}`} title="Hora acordada para devolver la llamada">
+                          ⏰ {fmtFechaHora(f.devolver_llamada_en, tz)}
+                        </span>
+                      )}
+                      {(f.estatus_llamada === 'NO CONTESTA' || f.estatus_llamada === 'BUZON') && (
                         <button
                           className="btn secundario mini"
                           disabled={ocupado === f.id}

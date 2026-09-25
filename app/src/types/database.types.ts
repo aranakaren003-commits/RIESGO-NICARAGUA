@@ -16,6 +16,9 @@ export type Llamada = {
   estatus_llamada: string | null
   comentario_llamada: string | null
   fecha_hora_llamada: string | null
+  devolver_llamada_en: string | null
+  caso_sospecha: string | null
+  adquirio_asistencia: string | null
   tipo_credito: string | null
   promotor: string | null
   categorizacion: string | null
@@ -88,8 +91,10 @@ export type VCola = {
   cedula: string | null
   fecha_formalizado: string | null
   estatus_llamada: string | null
+  caso_sospecha: string | null
+  devolver_llamada_en: string | null
   intentos: number
-  orden_estatus: number
+  orden_estatus: number // 0 = devolver llamada vigente, 1 sin asignar, 2 no contesta, 3 buzón, 4 devolver llamada futura
 }
 
 export type Permiso = {

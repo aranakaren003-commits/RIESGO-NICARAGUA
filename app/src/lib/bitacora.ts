@@ -16,6 +16,9 @@ export interface FilaImportar {
   promotor: string | null
   categorizacion: string | null
   modalidad: string | null
+  email: string | null // Correo_MK
+  sucursal: string | null // Suc Origen
+  origen: string | null // Medio Captacion
 }
 
 // Solo se importan los créditos en estos ESTADOS de la bitácora (comparación sin acentos ni mayúsculas).
@@ -98,6 +101,9 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
       promotor: limpia(r['Promotor']),
       categorizacion: limpia(r['Categorizacion']),
       modalidad: limpia(r['Modalidad']),
+      email: limpia(r['Correo_MK']),
+      sucursal: limpia(r['Suc Origen']),
+      origen: limpia(r['Medio Captacion']),
     })
   }
   return res

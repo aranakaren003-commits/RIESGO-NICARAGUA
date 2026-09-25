@@ -13,7 +13,9 @@ type Filtros = Partial<Record<FieldKey, string>>
 
 const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
   { key: 'estatus_llamada' },
+  { key: 'caso_sospecha' },
   { key: 'tipo_credito' },
+  { key: 'promotor', top: 10 },
   { key: 'atencion_tramite' },
   { key: 'atencion_ejecutivo' },
   { key: 'calificacion_gestion' },
@@ -22,6 +24,7 @@ const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
   { key: 'atencion_formalizador' },
   { key: 'conoce_asistencias' },
   { key: 'ofrecieron_asistencia' },
+  { key: 'adquirio_asistencia' },
   { key: 'entregaron_documentacion' },
   { key: 'claro_informacion' },
   { key: 'conforme_fechas_pago' },
