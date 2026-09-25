@@ -4,14 +4,17 @@ import { MESES, fmtFechaHora } from '../lib/fechas'
 import type { CargaBitacora } from '../types/database.types'
 
 interface Resultado {
-  carga: CargaBitacora | null
+  carga: CargaBitacora | null // null cuando se eligió «Todas las cargas» o no hay cargas
+  todas: boolean // «Todas las cargas»: todos los registros del país sin importar la carga
   cargando: boolean
   sinCargas: boolean
   controles: React.ReactNode
 }
 
+const TODAS = '__todas__'
+
 // Filtro Año → Mes → Día → Carga. Cada carga de la bitácora se conserva como histórico dentro de su período.
-export function useFiltroCarga(paisId: string, tz: string): Resultado {
+export function useFiltroCarga(paisId: string, tz: string, permitirTodas = false): Resultado {
   const [cargas, setCargas] = useState<CargaBitacora[]>([])
   const [cargando, setCargando] = useState(true)
   const [anio, setAnio] = useState('')
@@ -58,6 +61,7 @@ export function useFiltroCarga(paisId: string, tz: string): Resultado {
   )
 
   useEffect(() => {
+    if (cargaId === TODAS) return
     if (candidatas.length === 0) {
       if (cargaId) setCargaId('')
     } else if (!candidatas.some((c) => c.id === cargaId)) {
@@ -91,8 +95,10 @@ export function useFiltroCarga(paisId: string, tz: string): Resultado {
       </label>
       <label>
         Carga
-        <select value={cargaId} onChange={(e) => setCargaId(e.target.value)} disabled={candidatas.length === 0} style={{ minWidth: 250 }}>
-          {candidatas.length === 0 && <option value="">Sin cargas en esta fecha</option>}
+        <select value={cargaId} onChange={(e) => setCargaId(e.target.value)} disabled={candidatas.length === 0 && !permitirTodas} style={{ minWidth: 250 }}>
+          {permitirTodas && <option value={TODAS}>Todas las cargas</option>}
+          {candidatas.length === 0 && !permitirTodas && <option value="">Sin cargas en esta fecha</option>}
+          {candidatas.length === 0 && permitirTodas && cargaId !== TODAS && <option value="">Sin cargas en esta fecha</option>}
           {candidatas.map((c) => (
             <option key={c.id} value={c.id}>
               Carga {c.numero} · {fmtFechaHora(c.fecha_carga, tz)} · {c.total_importadas.toLocaleString('es-NI')} registros
@@ -103,5 +109,11 @@ export function useFiltroCarga(paisId: string, tz: string): Resultado {
     </>
   )
 
-  return { carga: cargas.find((c) => c.id === cargaId) ?? null, cargando, sinCargas: !cargando && cargas.length === 0, controles }
+  return {
+    carga: cargas.find((c) => c.id === cargaId) ?? null,
+    todas: permitirTodas && cargaId === TODAS,
+    cargando,
+    sinCargas: !cargando && cargas.length === 0,
+    controles,
+  }
 }

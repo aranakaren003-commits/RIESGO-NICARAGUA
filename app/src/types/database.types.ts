@@ -59,7 +59,9 @@ export type PerfilUsuario = {
   email: string | null
   nombre: string | null
   id_rol: string
+  id_pais: string | null // null = perfil regional
   activo: boolean
+  eliminado_en: string | null
   debe_cambiar_clave: boolean
   creado_en: string
   actualizado_en: string
@@ -70,8 +72,24 @@ export type Rol = {
   nombre: string
   descripcion: string | null
   es_sistema: boolean
+  ambito: 'regional' | 'pais' | 'ambos'
   creado_en: string
   actualizado_en: string
+}
+
+export type CampoConfig = { id_pais: string; campo: string; obligatorio: boolean; actualizado_en: string }
+
+export type VCola = {
+  id: string
+  id_pais: string
+  cliente: string
+  tipo_credito: string | null
+  telefono: string | null
+  cedula: string | null
+  fecha_formalizado: string | null
+  estatus_llamada: string | null
+  intentos: number
+  orden_estatus: number
 }
 
 export type Permiso = {
@@ -180,6 +198,12 @@ export type Database = {
         Update: Partial<IntentoLlamada>
         Relationships: []
       }
+      campos_formulario_config: {
+        Row: CampoConfig
+        Insert: Partial<CampoConfig> & Pick<CampoConfig, 'id_pais' | 'campo'>
+        Update: Partial<CampoConfig>
+        Relationships: []
+      }
       roles: {
         Row: Rol
         Insert: Partial<Rol> & Pick<Rol, 'nombre'>
@@ -202,10 +226,12 @@ export type Database = {
     Views: {
       v_llamadas_carga: { Row: VLlamadaCarga; Relationships: [] }
       v_intentos_llamada: { Row: VIntento; Relationships: [] }
+      v_cola_llamadas: { Row: VCola; Relationships: [] }
     }
     Functions: {
       clave_cambiada: { Args: never; Returns: undefined }
-      abrir_registro: { Args: { p_id: string }; Returns: Json }
+      registrar_intento: { Args: { p_id: string; p_resultado: string }; Returns: Json }
+      revertir_perfil: { Args: { p_user: string }; Returns: undefined }
       actualizar_intento: { Args: { p_id: string; p_estatus: string }; Returns: undefined }
       crear_carga: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }
       importar_lote: { Args: { p_carga: string; p_filas: Json }; Returns: number }

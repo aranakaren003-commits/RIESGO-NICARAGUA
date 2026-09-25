@@ -7,6 +7,9 @@ export const P = {
   graficasVer: 'graficas.ver',
   bitacoraImportar: 'bitacora.importar',
   intentosVer: 'intentos.ver',
+  gestionLlamadas: 'gestion.llamadas',
+  dashboardDescargar: 'dashboard.descargar',
+  adminFormulario: 'admin.formulario',
   adminUsuarios: 'admin.usuarios',
 } as const
 

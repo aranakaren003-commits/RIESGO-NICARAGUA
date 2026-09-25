@@ -1,6 +1,7 @@
 // Alta de usuarios @instacredit.com y restablecimiento de contraseña. Solo puede invocarla un administrador (permiso admin.usuarios).
+// Un administrador de un país solo administra usuarios de su país; un administrador regional (sin país) administra todos.
 // Body: { accion?: 'crear' | 'restablecer', ... }
-//   crear:        { email, nombre, id_rol, password }
+//   crear:        { email, nombre, id_rol, id_pais (opcional según el rol), password }
 //   restablecer:  { user_id, password }
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -29,6 +30,12 @@ Deno.serve(async (req: Request) => {
   if (errAdmin || !esAdmin) return json({ error: 'Solo un administrador puede realizar esta acción.' }, 403)
   const { data: quien } = await llamador.auth.getUser()
   const idLlamador = quien.user?.id
+  if (!idLlamador) return json({ error: 'Sesión inválida.' }, 401)
+
+  const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
+  const { data: perfilLlamador } = await admin.from('perfiles_usuario').select('id_pais').eq('user_id', idLlamador).maybeSingle()
+  const paisLlamador: string | null = perfilLlamador?.id_pais ?? null // null = administrador regional
+  const alcanza = (idPais: string | null) => (paisLlamador === null ? true : idPais === paisLlamador)
 
   // 2. Datos
   let cuerpo: Record<string, unknown>
@@ -41,16 +48,15 @@ Deno.serve(async (req: Request) => {
   const password = String(cuerpo.password ?? '')
   if (password.length < 8) return json({ error: 'La contraseña temporal debe tener al menos 8 caracteres.' }, 400)
 
-  const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
-
   // 3a. Restablecer contraseña de un usuario existente
   if (accion === 'restablecer') {
     const userId = String(cuerpo.user_id ?? '')
     if (!userId) return json({ error: 'Falta el usuario.' }, 400)
     if (userId === idLlamador) return json({ error: 'Tu propia contraseña no se restablece desde aquí.' }, 400)
 
-    const { data: perfil } = await admin.from('perfiles_usuario').select('user_id').eq('user_id', userId).maybeSingle()
+    const { data: perfil } = await admin.from('perfiles_usuario').select('user_id, id_pais').eq('user_id', userId).maybeSingle()
     if (!perfil) return json({ error: 'El usuario no existe.' }, 404)
+    if (!alcanza(perfil.id_pais)) return json({ error: 'No tienes alcance sobre ese usuario.' }, 403)
 
     const { error: errClave } = await admin.auth.admin.updateUserById(userId, { password })
     if (errClave) return json({ error: errClave.message }, 400)
@@ -63,8 +69,18 @@ Deno.serve(async (req: Request) => {
   const email = String(cuerpo.email ?? '').trim().toLowerCase()
   const nombre = String(cuerpo.nombre ?? '').trim()
   const idRol = String(cuerpo.id_rol ?? '')
+  const idPais: string | null = cuerpo.id_pais ? String(cuerpo.id_pais) : null
   if (!/^[^@\s]+@instacredit\.com$/.test(email)) return json({ error: `El correo debe tener el dominio ${DOMINIO}.` }, 400)
-  if (!idRol) return json({ error: 'Selecciona un rol.' }, 400)
+  if (!nombre) return json({ error: 'El nombre es obligatorio.' }, 400)
+  if (!idRol) return json({ error: 'Selecciona el puesto (rol).' }, 400)
+
+  const { data: rol } = await admin.from('roles').select('id, nombre, ambito').eq('id', idRol).maybeSingle()
+  if (!rol) return json({ error: 'El rol no existe.' }, 400)
+  if (rol.ambito === 'regional' && idPais) return json({ error: `El puesto «${rol.nombre}» es regional y no lleva país.` }, 400)
+  if (rol.ambito === 'pais' && !idPais) return json({ error: `El puesto «${rol.nombre}» requiere un país.` }, 400)
+  if (paisLlamador !== null && (rol.ambito === 'regional' || !alcanza(idPais))) {
+    return json({ error: 'Como administrador de un país solo puedes crear usuarios de tu país.' }, 403)
+  }
 
   const { data: creado, error: errCrear } = await admin.auth.admin.createUser({
     email,
@@ -79,11 +95,11 @@ Deno.serve(async (req: Request) => {
 
   const { error: errPerfil } = await admin
     .from('perfiles_usuario')
-    .update({ id_rol: idRol, nombre: nombre || null, activo: true, debe_cambiar_clave: true })
+    .update({ id_rol: idRol, id_pais: idPais, nombre, activo: true, debe_cambiar_clave: true })
     .eq('user_id', creado.user.id)
   if (errPerfil) {
     await admin.auth.admin.deleteUser(creado.user.id) // se deshace el usuario recién creado para no dejarlo a medias
-    return json({ error: `No se pudo asignar el rol: ${errPerfil.message}` }, 500)
+    return json({ error: `No se pudo asignar el puesto y el país: ${errPerfil.message}` }, 500)
   }
 
   return json({ ok: true, user_id: creado.user.id, email })

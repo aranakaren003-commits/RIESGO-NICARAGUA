@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Papa from 'papaparse'
-import { sb } from '../lib/supabase'
+import { origenLlamadas as origen } from '../lib/consultas'
 import { ALL_FIELDS, ESTATUS_LLAMADA, encuestaProgreso } from '../lib/fields'
 import { fmtFechaHora } from '../lib/fechas'
 import { usePais } from '../lib/pais'
@@ -12,13 +12,14 @@ import { useFiltroCarga } from './FiltroCarga'
 const TAM = 50
 
 interface Filtros {
-  idCarga: string
+  idCarga: string | null // null = todas las cargas del país
+  idPais: string
   estatus: string
   texto: string
 }
 
 function aplicarFiltros<T extends { eq: (c: string, v: string) => T; is: (c: string, v: null) => T; or: (f: string) => T }>(q: T, f: Filtros): T {
-  let r = q.eq('id_carga', f.idCarga)
+  let r = f.idCarga ? q.eq('id_carga', f.idCarga) : q.eq('id_pais', f.idPais)
   if (f.estatus === '__sin__') r = r.is('estatus_llamada', null)
   else if (f.estatus) r = r.eq('estatus_llamada', f.estatus)
   const t = f.texto.trim().replace(/[,()%*]/g, ' ')
@@ -44,7 +45,7 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
   const puedeEditar = permisos.has(P.registrosEditar)
   const puedeExportar = permisos.has(P.registrosExportar)
 
-  const { carga, cargando: cargandoCargas, sinCargas, controles } = useFiltroCarga(pais.id, tz)
+  const { carga, todas, cargando: cargandoCargas, sinCargas, controles } = useFiltroCarga(pais.id, tz, true)
   const [estatus, setEstatus] = useState('')
   const [texto, setTexto] = useState('')
   const [textoInput, setTextoInput] = useState('')
@@ -69,47 +70,47 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
   }, [carga?.id])
 
   const cargar = useCallback(async () => {
-    if (!carga) {
+    if (!carga && !todas) {
       setFilas([])
       setTotal(0)
       return
     }
     setCargando(true)
     setError('')
-    const { data, count, error } = await aplicarFiltros(sb.from('v_llamadas_carga').select('*', { count: 'exact' }), { idCarga: carga.id, estatus, texto })
+    const { data, count, error } = await aplicarFiltros(origen(todas).select('*', { count: 'exact' }), { idCarga: carga?.id ?? null, idPais: pais.id, estatus, texto })
       .order('num', { ascending: true })
       .range(pagina * TAM, pagina * TAM + TAM - 1)
     if (error) setError(error.message)
     setFilas(data ?? [])
     setTotal(count ?? 0)
     setCargando(false)
-  }, [carga, estatus, texto, pagina])
+  }, [carga, todas, pais.id, estatus, texto, pagina])
 
   useEffect(() => {
     cargar()
   }, [cargar])
 
   async function exportar() {
-    if (!carga) return
+    if (!carga && !todas) return
     setExportando(true)
-    const todas: VLlamadaCarga[] = []
+    const acumuladas: VLlamadaCarga[] = []
     for (let desde = 0; ; desde += 1000) {
-      const { data, error } = await aplicarFiltros(sb.from('v_llamadas_carga').select('*'), { idCarga: carga.id, estatus, texto })
+      const { data, error } = await aplicarFiltros(origen(todas).select('*'), { idCarga: carga?.id ?? null, idPais: pais.id, estatus, texto })
         .order('num', { ascending: true })
         .range(desde, desde + 999)
       if (error) {
         setError(error.message)
         break
       }
-      todas.push(...(data ?? []))
+      acumuladas.push(...(data ?? []))
       if (!data || data.length < 1000) break
     }
-    const filasCsv = todas.map((r) => ALL_FIELDS.map((f) => (f.type === 'datetime' ? fmtFechaHora(r[f.key] as string | null, tz) : (r[f.key] ?? ''))))
+    const filasCsv = acumuladas.map((r) => ALL_FIELDS.map((f) => (f.type === 'datetime' ? fmtFechaHora(r[f.key] as string | null, tz) : (r[f.key] ?? ''))))
     const csv = Papa.unparse({ fields: ALL_FIELDS.map((f) => f.label), data: filasCsv }, { delimiter: ';' })
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `llamadas_bienvenida_${pais.codigo}_${carga.periodo}_carga${carga.numero}.csv`
+    a.download = carga ? `llamadas_bienvenida_${pais.codigo}_${carga.periodo}_carga${carga.numero}.csv` : `llamadas_bienvenida_${pais.codigo}_todas.csv`
     a.click()
     URL.revokeObjectURL(a.href)
     setExportando(false)
@@ -187,8 +188,8 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
           {!cargando && !cargandoCargas && filas.length === 0 && (
             <div className="vacio">
               {sinCargas
-                ? `No hay cargas de la bitácora en ${pais.nombre}. Usa «Importar bitácora» para cargar la data.`
-                : !carga
+                ? `No hay cargas de la bitácora en ${pais.nombre}. Un analista de carga debe importar la bitácora.`
+                : !carga && !todas
                   ? 'No hay cargas en la fecha seleccionada.'
                   : 'No hay registros con estos filtros.'}
             </div>

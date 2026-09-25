@@ -3,7 +3,9 @@ import type { Pais } from '../types/database.types'
 
 interface PaisCtx {
   pais: Pais
-  cambiarPais: () => void
+  paises: Pais[] // países que el usuario puede ver (uno solo si su perfil es de país)
+  esRegional: boolean
+  elegirPais: (id: string) => void // solo para perfiles regionales
 }
 
 export const PaisContext = createContext<PaisCtx | null>(null)
@@ -14,9 +16,10 @@ export function usePais(): PaisCtx {
   return c
 }
 
-const CLAVE = 'rn_pais_id'
+const CLAVE = 'rn_pais_regional'
 
-export function leerPaisGuardado(): string | null {
+// Último país mirado por un perfil regional (comodidad; si no hay almacenamiento se usa el primero)
+export function leerPaisRegional(): string | null {
   try {
     return window.localStorage.getItem(CLAVE)
   } catch {
@@ -24,11 +27,10 @@ export function leerPaisGuardado(): string | null {
   }
 }
 
-export function guardarPais(id: string | null): void {
+export function guardarPaisRegional(id: string): void {
   try {
-    if (id) window.localStorage.setItem(CLAVE, id)
-    else window.localStorage.removeItem(CLAVE)
+    window.localStorage.setItem(CLAVE, id)
   } catch {
-    // sin almacenamiento disponible: se pedirá el país de nuevo
+    // sin almacenamiento disponible
   }
 }

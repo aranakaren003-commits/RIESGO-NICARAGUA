@@ -66,7 +66,7 @@ export default function Importar() {
     <div className="tarjeta grupo" style={{ maxWidth: 760 }}>
       <h3>Importar «Bitácora de Atención» · {pais.nombre}</h3>
       <p style={{ marginTop: 0 }}>
-        Carga el CSV de la bitácora (separador «;»). Cada importación se guarda como una <strong>carga nueva</strong> dentro del período (año y mes) de hoy en {pais.nombre}; las cargas
+        Carga el CSV de la bitácora (separador «;»). Solo puedes cargar la bitácora de {pais.nombre}, hasta <strong>5 archivos por día</strong>. Cada importación se guarda como una <strong>carga nueva</strong> dentro del período (año y mes) de hoy en {pais.nombre}; las cargas
         anteriores <strong>no se eliminan</strong> y se pueden consultar desde el filtro Año → Mes → Día → Carga. Se llenan los campos de información del cliente y del crédito
         (CLIENTE, ESTADO, INFORMA, NUMERO DE SOLICITUD, TIPO DE CRÉDITO, CEDULA, TELEFONO, LUGAR DONDE TRABAJA, FECHA DE FORMALIZADO, PROMOTOR, CATEGORIZACIÓN, MODALIDAD). Los demás campos los
         ingresa el usuario. El archivo se procesa en tu navegador y solo se guardan esos campos.

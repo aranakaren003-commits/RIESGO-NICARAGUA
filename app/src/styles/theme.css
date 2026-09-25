@@ -169,6 +169,37 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .correo-dominio input { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .correo-dominio span { display: flex; align-items: center; padding: 0 12px; background: #eef1f4; border: 1px solid var(--gris-borde); border-left: 0; border-radius: 0 8px 8px 0; color: var(--azul-claro); font-weight: 600; }
 
+/* Encabezado con bandera y pestañas de país (perfiles regionales) */
+.marca-pais { display: inline-flex; align-items: center; gap: 10px; }
+.marca .suave { color: var(--verde-claro); font-weight: 500; }
+.bandera-codigo { display: inline-block; padding: 0 6px; font-size: 11px; font-weight: 800; background: var(--verde-claro); color: var(--azul); border-radius: 3px; }
+.pestanas-pais { background: #fff; border-bottom: 1px solid var(--gris-borde); padding: 0 24px; display: flex; gap: 4px; overflow-x: auto; }
+.pestanas-pais button {
+  display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; border-bottom: 3px solid transparent;
+  padding: 10px 16px; font-weight: 700; color: var(--azul-claro); cursor: pointer; white-space: nowrap;
+}
+.pestanas-pais button.activo { color: var(--azul); border-bottom-color: var(--verde); }
+.pais-celda { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Cola de gestión de llamadas */
+.estatus-celda { display: inline-flex; align-items: center; gap: 6px; }
+.estatus-select { font-weight: 700; min-width: 150px; color: var(--azul-claro); }
+.estatus-select.con-estatus { color: var(--azul); background: #e3e9f2; }
+.btn.mini { padding: 4px 8px; font-size: 12px; }
+
+/* Administración de usuarios */
+.barra-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--gris-borde); }
+.barra-acciones .espacio { flex: 1; }
+.fila-elegida { background: var(--verde-claro); }
+
+/* Dashboard: filtros cruzados */
+.chips-filtro { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; color: var(--azul-claro); font-weight: 600; }
+.chip-filtro { background: var(--azul); color: #fff; border: 0; border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+button.barra-fila.clicable { width: 100%; background: none; border: 0; padding: 4px 6px; margin: 2px 0; border-radius: 6px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+button.barra-fila.clicable:hover { background: #eef1f4; }
+button.barra-fila.elegida { background: var(--verde-claro); outline: 2px solid var(--verde); }
+button.barra-fila.atenuada { opacity: 0.55; }
+
 /* Selección de país */
 .paises-rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .pais-tarjeta {
