@@ -60,6 +60,7 @@ export type PerfilUsuario = {
   nombre: string | null
   id_rol: string
   activo: boolean
+  debe_cambiar_clave: boolean
   creado_en: string
   actualizado_en: string
 }
@@ -203,6 +204,7 @@ export type Database = {
       v_intentos_llamada: { Row: VIntento; Relationships: [] }
     }
     Functions: {
+      clave_cambiada: { Args: never; Returns: undefined }
       abrir_registro: { Args: { p_id: string }; Returns: Json }
       actualizar_intento: { Args: { p_id: string; p_estatus: string }; Returns: undefined }
       crear_carga: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }

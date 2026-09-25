@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { sb } from '../lib/supabase'
+import CampoClave from './CampoClave'
 import { zonaValida } from '../lib/fechas'
 import type { Pais, PerfilUsuario, Permiso, Rol, RolPermiso } from '../types/database.types'
 
@@ -57,6 +58,104 @@ export default function Administracion({ miId, onPaisesCambiaron }: { miId: stri
         <Roles datos={datos} onCambio={cargar} onError={setError} />
       )}
     </>
+  )
+}
+
+const DOMINIO = '@instacredit.com'
+
+function generarClave(): string {
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = crypto.getRandomValues(new Uint32Array(12))
+  return Array.from(bytes, (b) => letras[b % letras.length]).join('') + '#7'
+}
+
+function NuevoUsuario({ roles, onCreado }: { roles: Rol[]; onCreado: () => void }) {
+  const rolPorDefecto = roles.find((r) => r.nombre === 'Consulta')?.id ?? roles[0]?.id ?? ''
+  const [usuario, setUsuario] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [idRol, setIdRol] = useState(rolPorDefecto)
+  const [clave, setClave] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const [creado, setCreado] = useState<{ email: string; clave: string } | null>(null)
+
+  useEffect(() => {
+    if (!idRol && rolPorDefecto) setIdRol(rolPorDefecto)
+  }, [idRol, rolPorDefecto])
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setCreado(null)
+    const local = usuario.trim().toLowerCase().replace(/@.*$/, '')
+    if (!/^[a-z0-9._%+-]+$/.test(local)) return setError('El usuario del correo solo puede llevar letras, números y . _ % + -')
+    if (clave.length < 8) return setError('La contraseña temporal debe tener al menos 8 caracteres.')
+    if (!idRol) return setError('Selecciona un rol.')
+    const email = `${local}${DOMINIO}`
+
+    setGuardando(true)
+    const { data, error } = await sb.functions.invoke('crear-usuario', { body: { email, nombre: nombre.trim(), id_rol: idRol, password: clave } })
+    setGuardando(false)
+    if (error) {
+      let detalle = error.message
+      const ctx = (error as { context?: Response }).context
+      if (ctx && typeof ctx.json === 'function') {
+        try {
+          detalle = ((await ctx.json()) as { error?: string }).error ?? detalle
+        } catch {
+          // se deja el mensaje genérico
+        }
+      }
+      return setError(detalle)
+    }
+    if ((data as { error?: string } | null)?.error) return setError((data as { error: string }).error)
+    setCreado({ email, clave })
+    setUsuario('')
+    setNombre('')
+    setClave('')
+    onCreado()
+  }
+
+  return (
+    <form className="tarjeta grupo" style={{ marginBottom: 16 }} onSubmit={crear}>
+      <h3>Nuevo usuario <span className="etiqueta-origen manual">Solo correos {DOMINIO}</span></h3>
+      <div className="rejilla">
+        <div className="campo">
+          <label htmlFor="nu-correo">Correo</label>
+          <div className="correo-dominio">
+            <input id="nu-correo" value={usuario} onChange={(e) => setUsuario(e.target.value)} placeholder="nombre.apellido" autoComplete="off" required />
+            <span>{DOMINIO}</span>
+          </div>
+        </div>
+        <div className="campo">
+          <label htmlFor="nu-nombre">Nombre</label>
+          <input id="nu-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo" autoComplete="off" />
+        </div>
+        <div className="campo">
+          <label htmlFor="nu-rol">Rol</label>
+          <select id="nu-rol" value={idRol} onChange={(e) => setIdRol(e.target.value)}>
+            {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="nu-clave">Contraseña temporal</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}><CampoClave id="nu-clave" value={clave} onChange={setClave} autoComplete="new-password" minLength={8} required /></div>
+            <button type="button" className="btn secundario" onClick={() => setClave(generarClave())}>Generar</button>
+          </div>
+        </div>
+      </div>
+      <div className="aviso info" style={{ margin: '12px 0' }}>
+        El usuario se crea activo y con el correo ya confirmado. En su primer ingreso el sistema le pedirá cambiar esta contraseña. Compártesela por un canal seguro.
+      </div>
+      {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
+      {creado && (
+        <div className="aviso ok" style={{ marginBottom: 12 }}>
+          Usuario creado: <strong>{creado.email}</strong>. Contraseña temporal: <strong>{creado.clave}</strong> (cópiala ahora; no se vuelve a mostrar).
+        </div>
+      )}
+      <button className="btn" disabled={guardando}>{guardando ? 'Creando…' : 'Crear usuario'}</button>
+    </form>
   )
 }
 
@@ -166,10 +265,12 @@ function Usuarios({ datos, miId, onCambio, onError }: { datos: Datos; miId: stri
 
   return (
     <>
-      <div className="aviso info" style={{ marginBottom: 12 }}>
-        Los usuarios se crean solos al registrarse desde la pantalla de acceso («Crear cuenta nueva»). Quedan <strong>inactivos</strong> con el rol «Consulta» hasta que
-        aquí los actives y les asignes su rol. {pendientes > 0 && <strong>Pendientes de activar: {pendientes}.</strong>}
-      </div>
+      <NuevoUsuario roles={datos.roles} onCreado={onCambio} />
+      {pendientes > 0 && (
+        <div className="aviso info" style={{ marginBottom: 12 }}>
+          Hay {pendientes} usuario(s) inactivo(s). Actívalos y asígnales su rol en la tabla.
+        </div>
+      )}
       <div className="tarjeta">
         <div className="tabla-envoltorio">
           <table className="sin-clic">

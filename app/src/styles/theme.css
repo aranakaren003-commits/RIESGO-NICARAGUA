@@ -163,6 +163,10 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .barra-fila .relleno { height: 100%; background: var(--verde); border-radius: 6px; }
 .barra-fila .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--azul); font-weight: 700; }
 
+.correo-dominio { display: flex; align-items: stretch; }
+.correo-dominio input { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.correo-dominio span { display: flex; align-items: center; padding: 0 12px; background: #eef1f4; border: 1px solid var(--gris-borde); border-left: 0; border-radius: 0 8px 8px 0; color: var(--azul-claro); font-weight: 600; }
+
 /* Selección de país */
 .paises-rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .pais-tarjeta {

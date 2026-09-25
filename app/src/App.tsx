@@ -11,6 +11,7 @@ import Importar from './components/Importar'
 import Intentos from './components/Intentos'
 import Administracion from './components/Administracion'
 import SeleccionPais from './components/SeleccionPais'
+import CambiarClave from './components/CambiarClave'
 
 type Vista = 'registros' | 'graficas' | 'intentos' | 'importar' | 'admin'
 
@@ -64,6 +65,10 @@ export default function App() {
   if (!listo) return <div className="vacio">Cargando…</div>
   if (!sesion) return <Login />
   if (cargandoPerfil) return <div className="vacio">Cargando…</div>
+
+  if (perfil?.debe_cambiar_clave) {
+    return <CambiarClave email={sesion.user.email} onListo={() => setPerfil({ ...perfil, debe_cambiar_clave: false })} onSalir={() => sb.auth.signOut()} />
+  }
 
   const visibles = VISTAS.filter((v) => permisos.has(v.permiso))
 
