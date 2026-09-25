@@ -1,37 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Papa from 'papaparse'
 import { sb } from '../lib/supabase'
-import { ALL_FIELDS, ESTATUS_LLAMADA, encuestaProgreso, fmtFecha } from '../lib/fields'
+import { ALL_FIELDS, ESTATUS_LLAMADA, encuestaProgreso } from '../lib/fields'
+import { fmtFechaHora } from '../lib/fechas'
+import { usePais } from '../lib/pais'
 import { P, type Permisos } from '../lib/permisos'
-import type { Llamada } from '../types/database.types'
+import type { Llamada, VLlamadaCarga } from '../types/database.types'
 import RegistroForm from './RegistroForm'
+import { useFiltroCarga } from './FiltroCarga'
 
 const TAM = 50
 
-export function listaPeriodos(): string[] {
-  const out: string[] = []
-  const hoy = new Date()
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return out
-}
-
 interface Filtros {
-  periodo: string
+  idCarga: string
   estatus: string
   texto: string
 }
 
 function aplicarFiltros<T extends { eq: (c: string, v: string) => T; is: (c: string, v: null) => T; or: (f: string) => T }>(q: T, f: Filtros): T {
-  let r = q
-  if (f.periodo) r = r.eq('periodo', f.periodo)
+  let r = q.eq('id_carga', f.idCarga)
   if (f.estatus === '__sin__') r = r.is('estatus_llamada', null)
   else if (f.estatus) r = r.eq('estatus_llamada', f.estatus)
   const t = f.texto.trim().replace(/[,()%*]/g, ' ')
   if (t) {
-    const partes = [`cliente.ilike.%${t}%`, `cedula.ilike.%${t}%`, `telefono.ilike.%${t}%`, `informa.ilike.%${t}%`]
+    const partes = [`cliente.ilike.%${t}%`, `cedula.ilike.%${t}%`, `telefono.ilike.%${t}%`, `informa.ilike.%${t}%`, `tipo_credito.ilike.%${t}%`]
     if (/^\d+$/.test(t)) partes.push(`numero_solicitud.eq.${t}`)
     r = r.or(partes.join(','))
   }
@@ -46,14 +38,18 @@ function claseEstatus(e: string | null): string {
 }
 
 export default function Registros({ permisos }: { permisos: Permisos }) {
+  const { pais } = usePais()
+  const tz = pais.zona_horaria
   const puedeCrear = permisos.has(P.registrosCrear)
   const puedeEditar = permisos.has(P.registrosEditar)
   const puedeExportar = permisos.has(P.registrosExportar)
-  const periodos = useMemo(listaPeriodos, [])
-  const [filtros, setFiltros] = useState<Filtros>({ periodo: periodos[0], estatus: '', texto: '' })
+
+  const { carga, cargando: cargandoCargas, sinCargas, controles } = useFiltroCarga(pais.id, tz)
+  const [estatus, setEstatus] = useState('')
+  const [texto, setTexto] = useState('')
   const [textoInput, setTextoInput] = useState('')
   const [pagina, setPagina] = useState(0)
-  const [filas, setFilas] = useState<Llamada[]>([])
+  const [filas, setFilas] = useState<VLlamadaCarga[]>([])
   const [total, setTotal] = useState(0)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
@@ -62,34 +58,43 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setFiltros((f) => (f.texto === textoInput ? f : { ...f, texto: textoInput }))
+      setTexto(textoInput)
       setPagina(0)
     }, 350)
     return () => clearTimeout(t)
   }, [textoInput])
 
+  useEffect(() => {
+    setPagina(0)
+  }, [carga?.id])
+
   const cargar = useCallback(async () => {
+    if (!carga) {
+      setFilas([])
+      setTotal(0)
+      return
+    }
     setCargando(true)
     setError('')
-    const q = aplicarFiltros(sb.from('llamadas_bienvenida').select('*', { count: 'exact' }), filtros)
+    const { data, count, error } = await aplicarFiltros(sb.from('v_llamadas_carga').select('*', { count: 'exact' }), { idCarga: carga.id, estatus, texto })
       .order('num', { ascending: true })
       .range(pagina * TAM, pagina * TAM + TAM - 1)
-    const { data, count, error } = await q
     if (error) setError(error.message)
     setFilas(data ?? [])
     setTotal(count ?? 0)
     setCargando(false)
-  }, [filtros, pagina])
+  }, [carga, estatus, texto, pagina])
 
   useEffect(() => {
     cargar()
   }, [cargar])
 
   async function exportar() {
+    if (!carga) return
     setExportando(true)
-    const todas: Llamada[] = []
+    const todas: VLlamadaCarga[] = []
     for (let desde = 0; ; desde += 1000) {
-      const { data, error } = await aplicarFiltros(sb.from('llamadas_bienvenida').select('*'), filtros)
+      const { data, error } = await aplicarFiltros(sb.from('v_llamadas_carga').select('*'), { idCarga: carga.id, estatus, texto })
         .order('num', { ascending: true })
         .range(desde, desde + 999)
       if (error) {
@@ -99,12 +104,12 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
       todas.push(...(data ?? []))
       if (!data || data.length < 1000) break
     }
-    const filasCsv = todas.map((r) => ALL_FIELDS.map((f) => (f.type === 'datetime' ? fmtFecha(r[f.key] as string | null) : (r[f.key] ?? ''))))
+    const filasCsv = todas.map((r) => ALL_FIELDS.map((f) => (f.type === 'datetime' ? fmtFechaHora(r[f.key] as string | null, tz) : (r[f.key] ?? ''))))
     const csv = Papa.unparse({ fields: ALL_FIELDS.map((f) => f.label), data: filasCsv }, { delimiter: ';' })
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `llamadas_bienvenida_${filtros.periodo || 'todos'}.csv`
+    a.download = `llamadas_bienvenida_${pais.codigo}_${carga.periodo}_carga${carga.numero}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
     setExportando(false)
@@ -115,16 +120,10 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
   return (
     <>
       <div className="barra">
-        <label>
-          Período
-          <select value={filtros.periodo} onChange={(e) => { setFiltros({ ...filtros, periodo: e.target.value }); setPagina(0) }}>
-            <option value="">Todos</option>
-            {periodos.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
+        {controles}
         <label>
           ESTATUS DE LLAMADA
-          <select value={filtros.estatus} onChange={(e) => { setFiltros({ ...filtros, estatus: e.target.value }); setPagina(0) }}>
+          <select value={estatus} onChange={(e) => { setEstatus(e.target.value); setPagina(0) }}>
             <option value="">Todos</option>
             <option value="__sin__">Sin estatus</option>
             {ESTATUS_LLAMADA.map((e) => <option key={e} value={e}>{e}</option>)}
@@ -132,11 +131,11 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
         </label>
         <label>
           Buscar
-          <input placeholder="Cliente, cédula, teléfono, solicitud…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 280 }} />
+          <input placeholder="Cliente, cédula, teléfono, solicitud…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 240 }} />
         </label>
         <div className="espacio" />
         {puedeExportar && <button className="btn secundario" onClick={exportar} disabled={exportando || total === 0}>{exportando ? 'Exportando…' : 'Exportar CSV'}</button>}
-        {puedeCrear && <button className="btn" onClick={() => setEditando(null)}>Nuevo registro</button>}
+        {puedeCrear && <button className="btn" onClick={() => setEditando(null)} disabled={!carga}>Nuevo registro</button>}
       </div>
 
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -150,6 +149,7 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
                 <th>CLIENTE</th>
                 <th>ESTADO</th>
                 <th>NUMERO DE SOLICITUD</th>
+                <th>TIPO DE CRÉDITO</th>
                 <th>CEDULA</th>
                 <th>TELEFONO</th>
                 <th>FECHA DE FORMALIZADO</th>
@@ -167,9 +167,10 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
                     <td title={r.cliente}>{r.cliente}</td>
                     <td>{r.estado}</td>
                     <td>{r.numero_solicitud}</td>
+                    <td>{r.tipo_credito}</td>
                     <td>{r.cedula}</td>
                     <td>{r.telefono}</td>
-                    <td>{fmtFecha(r.fecha_formalizado)}</td>
+                    <td>{fmtFechaHora(r.fecha_formalizado, tz)}</td>
                     <td>{r.estatus_llamada ? <span className={claseEstatus(r.estatus_llamada)}>{r.estatus_llamada}</span> : <span className="chip">Sin estatus</span>}</td>
                     <td title={r.promotor ?? ''}>{r.promotor}</td>
                     <td>
@@ -183,8 +184,14 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
               })}
             </tbody>
           </table>
-          {!cargando && filas.length === 0 && (
-            <div className="vacio">No hay registros con estos filtros. Usa «Importar bitácora» para cargar la data o «Nuevo registro».</div>
+          {!cargando && !cargandoCargas && filas.length === 0 && (
+            <div className="vacio">
+              {sinCargas
+                ? `No hay cargas de la bitácora en ${pais.nombre}. Usa «Importar bitácora» para cargar la data.`
+                : !carga
+                  ? 'No hay cargas en la fecha seleccionada.'
+                  : 'No hay registros con estos filtros.'}
+            </div>
           )}
         </div>
         <div className="pie">
@@ -200,6 +207,7 @@ export default function Registros({ permisos }: { permisos: Permisos }) {
         <RegistroForm
           key={editando?.id ?? 'nuevo'}
           registro={editando}
+          idCarga={carga?.id ?? null}
           soloLectura={editando ? !puedeEditar : !puedeCrear}
           onClose={() => setEditando(undefined)}
           onSaved={() => {

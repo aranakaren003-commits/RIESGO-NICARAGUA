@@ -2,6 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Llamada = {
   id: string
+  id_pais: string
   num: number
   periodo: string
   cliente: string
@@ -83,6 +84,62 @@ export type RolPermiso = {
   codigo_permiso: string
 }
 
+export type Pais = {
+  id: string
+  codigo: string
+  nombre: string
+  zona_horaria: string
+  activo: boolean
+  creado_en: string
+  actualizado_en: string
+}
+
+export type CargaBitacora = {
+  id: string
+  id_pais: string
+  periodo: string
+  numero: number
+  fecha_local: string
+  fecha_carga: string
+  nombre_archivo: string | null
+  total_filas: number
+  total_importadas: number
+  nuevos: number
+  cargado_por: string | null
+}
+
+export type CargaRegistro = { id_carga: string; id_llamada: string }
+
+export type IntentoLlamada = {
+  id: string
+  id_llamada: string
+  id_pais: string
+  user_id: string | null
+  usuario: string | null
+  hora_intento: string
+  estatus_llamada: string | null
+}
+
+export type VLlamadaCarga = Llamada & { id_carga: string }
+
+export type VIntento = {
+  id: string
+  id_pais: string
+  hora_intento: string
+  usuario: string | null
+  estatus_intento: string | null
+  id_llamada: string
+  num: number
+  cliente: string
+  estado: string | null
+  numero_solicitud: number
+  tipo_credito: string | null
+  cedula: string | null
+  telefono: string | null
+  fecha_formalizado: string | null
+  promotor: string | null
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -96,6 +153,30 @@ export type Database = {
         Row: PerfilUsuario
         Insert: Partial<PerfilUsuario> & Pick<PerfilUsuario, 'user_id'>
         Update: Partial<PerfilUsuario>
+        Relationships: []
+      }
+      paises: {
+        Row: Pais
+        Insert: Partial<Pais> & Pick<Pais, 'codigo' | 'nombre' | 'zona_horaria'>
+        Update: Partial<Pais>
+        Relationships: []
+      }
+      cargas_bitacora: {
+        Row: CargaBitacora
+        Insert: Partial<CargaBitacora> & Pick<CargaBitacora, 'id_pais' | 'periodo' | 'numero' | 'fecha_local'>
+        Update: Partial<CargaBitacora>
+        Relationships: []
+      }
+      carga_registros: {
+        Row: CargaRegistro
+        Insert: CargaRegistro
+        Update: Partial<CargaRegistro>
+        Relationships: []
+      }
+      intentos_llamada: {
+        Row: IntentoLlamada
+        Insert: Partial<IntentoLlamada> & Pick<IntentoLlamada, 'id_llamada' | 'id_pais'>
+        Update: Partial<IntentoLlamada>
         Relationships: []
       }
       roles: {
@@ -117,8 +198,15 @@ export type Database = {
         Relationships: []
       }
     }
-    Views: { [_ in never]: never }
+    Views: {
+      v_llamadas_carga: { Row: VLlamadaCarga; Relationships: [] }
+      v_intentos_llamada: { Row: VIntento; Relationships: [] }
+    }
     Functions: {
+      abrir_registro: { Args: { p_id: string }; Returns: Json }
+      actualizar_intento: { Args: { p_id: string; p_estatus: string }; Returns: undefined }
+      crear_carga: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }
+      importar_lote: { Args: { p_carga: string; p_filas: Json }; Returns: number }
       usuario_activo: { Args: never; Returns: boolean }
       usuario_es_admin: { Args: never; Returns: boolean }
       tiene_permiso: { Args: { p_codigo: string }; Returns: boolean }

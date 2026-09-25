@@ -69,7 +69,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: 'Seguimiento de la llamada',
     fields: [
       f('estatus_llamada', 'J', 'ESTATUS DE LLAMADA', 'select', 'manual', { options: ESTATUS_LLAMADA }),
-      f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual'),
+      // Se fija sola la primera vez que se abre el registro (hora del país) y no se puede modificar
+      f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual', { readOnly: true }),
       f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
     ],
   },
@@ -143,24 +144,6 @@ export const FIELD_GROUPS: FieldGroup[] = [
 
 export const ALL_FIELDS: FieldDef[] = FIELD_GROUPS.flatMap((g) => g.fields)
 export const MANUAL_FIELDS = ALL_FIELDS.filter((x) => x.source === 'manual')
-
-const TZ = 'America/Managua'
-
-export function fmtFecha(iso: string | null): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('es-NI', { timeZone: TZ, dateStyle: 'short', timeStyle: 'short' })
-}
-
-// timestamptz -> valor de <input type="datetime-local"> en hora de Nicaragua (UTC-6, sin horario de verano)
-export function isoToLocalInput(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(new Date(iso).getTime() - 6 * 3600 * 1000)
-  return d.toISOString().slice(0, 16)
-}
-
-export function localInputToIso(v: string): string | null {
-  return v ? `${v}:00-06:00` : null
-}
 
 export function encuestaProgreso(r: Llamada): { llenos: number; total: number } {
   const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_llamada' && x.key !== 'fecha_hora_llamada')

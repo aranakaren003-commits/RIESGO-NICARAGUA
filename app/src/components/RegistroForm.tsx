@@ -1,33 +1,54 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sb } from '../lib/supabase'
-import { FIELD_GROUPS, esProducto, isoToLocalInput, localInputToIso, type FieldDef } from '../lib/fields'
+import { FIELD_GROUPS, esProducto, type FieldDef } from '../lib/fields'
+import { isoToLocalInput, localInputToIso, periodoDe } from '../lib/fechas'
+import { usePais } from '../lib/pais'
 import type { Database, Llamada } from '../types/database.types'
 
 type Update = Database['public']['Tables']['llamadas_bienvenida']['Update']
+type Insert = Database['public']['Tables']['llamadas_bienvenida']['Insert']
 
 interface Props {
   registro: Llamada | null // null = registro nuevo
+  idCarga: string | null // carga a la que se liga un registro nuevo
   soloLectura: boolean
   onClose: () => void
   onSaved: () => void
 }
 
-function valorInicial(r: Llamada | null, f: FieldDef): string {
+function valorInicial(r: Llamada | null, f: FieldDef, tz: string): string {
   if (!r) return ''
   const v = r[f.key]
   if (v === null || v === undefined) return ''
-  if (f.type === 'datetime') return isoToLocalInput(String(v))
+  if (f.type === 'datetime') return isoToLocalInput(String(v), tz)
   return String(v)
 }
 
-export default function RegistroForm({ registro, soloLectura, onClose, onSaved }: Props) {
+export default function RegistroForm({ registro, idCarga, soloLectura, onClose, onSaved }: Props) {
+  const { pais } = usePais()
+  const tz = pais.zona_horaria
   const [valores, setValores] = useState<Record<string, string>>(() => {
     const ini: Record<string, string> = {}
-    for (const g of FIELD_GROUPS) for (const f of g.fields) ini[f.key] = valorInicial(registro, f)
+    for (const g of FIELD_GROUPS) for (const f of g.fields) ini[f.key] = valorInicial(registro, f, tz)
     return ini
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const intentoId = useRef<string | null>(null)
+  const abierto = useRef(false)
+
+  // Al abrir un registro existente: se fija (solo la primera vez) FECHA Y HORA y se anota un intento en la bitácora.
+  useEffect(() => {
+    if (!registro || soloLectura || abierto.current) return
+    abierto.current = true
+    sb.rpc('abrir_registro', { p_id: registro.id }).then(({ data, error }) => {
+      if (error) return setError(`No se pudo registrar el intento: ${error.message}`)
+      const r = data as { fecha_hora_llamada: string | null; id_intento: string } | null
+      if (!r) return
+      intentoId.current = r.id_intento
+      setValores((p) => ({ ...p, fecha_hora_llamada: isoToLocalInput(r.fecha_hora_llamada, tz) }))
+    })
+  }, [registro, soloLectura, tz])
 
   const cambia = (k: string, v: string) => setValores((p) => ({ ...p, [k]: v }))
 
@@ -54,23 +75,36 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
         const v = valores[f.key].trim()
         if (!aplica) payload[f.key] = null // sección que no aplica al producto: se deja vacía
         else if (f.key === 'numero_solicitud') payload[f.key] = solicitud
-        else if (f.type === 'datetime') payload[f.key] = localInputToIso(valores[f.key])
+        else if (f.type === 'datetime') payload[f.key] = localInputToIso(valores[f.key], tz)
         else payload[f.key] = v === '' ? null : v
       }
     }
     const iso = payload.fecha_formalizado
-    payload.periodo =
-      typeof iso === 'string' ? isoToLocalInput(iso).slice(0, 7) : (registro?.periodo ?? new Date().toISOString().slice(0, 7))
+    payload.periodo = typeof iso === 'string' ? periodoDe(iso, tz) : (registro?.periodo ?? periodoDe(new Date().toISOString(), tz))
 
     setGuardando(true)
-    const res = registro
-      ? await sb.from('llamadas_bienvenida').update(payload as Update).eq('id', registro.id)
-      : await sb.from('llamadas_bienvenida').insert(payload as Database['public']['Tables']['llamadas_bienvenida']['Insert'])
-    setGuardando(false)
-    if (res.error) {
-      setError(res.error.code === '23505' ? 'Ya existe un registro con ese NUMERO DE SOLICITUD.' : res.error.message)
-      return
+    if (registro) {
+      const res = await sb.from('llamadas_bienvenida').update(payload as Update).eq('id', registro.id)
+      if (res.error) {
+        setGuardando(false)
+        return setError(res.error.message)
+      }
+      // el intento de esta apertura queda con el estatus que se dejó al guardar
+      if (intentoId.current) await sb.rpc('actualizar_intento', { p_id: intentoId.current, p_estatus: (payload.estatus_llamada as string | null) ?? '' })
+    } else {
+      const res = await sb
+        .from('llamadas_bienvenida')
+        .insert({ ...payload, id_pais: pais.id } as unknown as Insert)
+        .select('id')
+        .single()
+      if (res.error || !res.data) {
+        setGuardando(false)
+        return setError(res.error?.code === '23505' ? 'Ya existe un registro con ese NUMERO DE SOLICITUD en este país.' : (res.error?.message ?? 'No se pudo crear el registro.'))
+      }
+      if (idCarga) await sb.from('carga_registros').insert({ id_carga: idCarga, id_llamada: res.data.id })
+      await sb.rpc('abrir_registro', { p_id: res.data.id })
     }
+    setGuardando(false)
     onSaved()
   }
 
@@ -103,7 +137,7 @@ export default function RegistroForm({ registro, soloLectura, onClose, onSaved }
     } else {
       const tipo = f.type === 'datetime' ? 'datetime-local' : f.type === 'number' ? 'number' : f.type
       control = (
-        <input id={id} type={tipo} value={f.key === 'num' && !registro ? '' : v} placeholder={f.key === 'num' ? 'Automático' : ''} disabled={bloqueado} onChange={(e) => cambia(f.key, e.target.value)} />
+        <input id={id} type={tipo} value={f.key === 'num' && !registro ? '' : v} placeholder={f.key === 'num' ? 'Automático' : f.key === 'fecha_hora_llamada' ? 'Se registra al abrir' : ''} disabled={bloqueado} onChange={(e) => cambia(f.key, e.target.value)} />
       )
     }
     return (

@@ -6,6 +6,7 @@ export const P = {
   registrosExportar: 'registros.exportar',
   graficasVer: 'graficas.ver',
   bitacoraImportar: 'bitacora.importar',
+  intentosVer: 'intentos.ver',
   adminUsuarios: 'admin.usuarios',
 } as const
 

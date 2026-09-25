@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { sb } from '../lib/supabase'
 import { ALL_FIELDS, type FieldKey } from '../lib/fields'
+import { usePais } from '../lib/pais'
 import type { Llamada } from '../types/database.types'
-import { listaPeriodos } from './Registros'
+import { useFiltroCarga } from './FiltroCarga'
 
 const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
   { key: 'estatus_llamada' },
+  { key: 'tipo_credito' },
   { key: 'atencion_tramite' },
   { key: 'atencion_ejecutivo' },
   { key: 'calificacion_gestion' },
@@ -22,7 +24,7 @@ const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
   { key: 'origen', top: 10 },
 ]
 
-const COLUMNAS = ['periodo', ...CAMPOS_GRAFICA.map((c) => c.key)].join(',')
+const COLUMNAS = CAMPOS_GRAFICA.map((c) => c.key).join(',')
 
 function contar(filas: Llamada[], key: FieldKey, top?: number) {
   const m = new Map<string, number>()
@@ -37,22 +39,30 @@ function contar(filas: Llamada[], key: FieldKey, top?: number) {
 }
 
 export default function Graficas() {
-  const periodos = useMemo(listaPeriodos, [])
-  const [periodo, setPeriodo] = useState(periodos[0])
+  const { pais } = usePais()
+  const { carga, cargando: cargandoCargas, controles } = useFiltroCarga(pais.id, pais.zona_horaria)
   const [filas, setFilas] = useState<Llamada[]>([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
+  const cargaId = carga?.id
 
   useEffect(() => {
+    if (!cargaId) {
+      setFilas([])
+      return
+    }
     let activo = true
     ;(async () => {
       setCargando(true)
       setError('')
       const acum: Llamada[] = []
       for (let desde = 0; ; desde += 1000) {
-        let q = sb.from('llamadas_bienvenida').select(COLUMNAS).range(desde, desde + 999)
-        if (periodo) q = q.eq('periodo', periodo)
-        const { data, error } = await q.returns<Llamada[]>()
+        const { data, error } = await sb
+          .from('v_llamadas_carga')
+          .select(COLUMNAS)
+          .eq('id_carga', cargaId)
+          .range(desde, desde + 999)
+          .returns<Llamada[]>()
         if (error) {
           if (activo) setError(error.message)
           break
@@ -68,26 +78,18 @@ export default function Graficas() {
     return () => {
       activo = false
     }
-  }, [periodo])
+  }, [cargaId])
 
   const conEstatus = filas.filter((r) => r.estatus_llamada).length
 
   return (
     <>
-      <div className="barra">
-        <label>
-          Período
-          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
-            <option value="">Todos</option>
-            {periodos.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-      </div>
+      <div className="barra">{controles}</div>
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
-      {cargando ? (
+      {cargando || cargandoCargas ? (
         <div className="vacio">Cargando…</div>
       ) : filas.length === 0 ? (
-        <div className="vacio">No hay registros en este período.</div>
+        <div className="vacio">No hay registros en la carga seleccionada de {pais.nombre}.</div>
       ) : (
         <>
           <div className="kpis">

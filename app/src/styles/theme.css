@@ -163,6 +163,16 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .barra-fila .relleno { height: 100%; background: var(--verde); border-radius: 6px; }
 .barra-fila .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--azul); font-weight: 700; }
 
+/* Selección de país */
+.paises-rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.pais-tarjeta {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 16px; cursor: pointer;
+  background: #fff; border: 1px solid var(--gris-borde); border-radius: var(--radio); color: var(--azul);
+}
+.pais-tarjeta strong { font-size: 16px; }
+.pais-tarjeta span { font-size: 11.5px; color: var(--azul-claro); }
+.pais-tarjeta:hover { border-color: var(--verde); background: var(--verde-claro); }
+
 /* Administración */
 .pestanas { display: flex; gap: 4px; border-bottom: 2px solid var(--gris-borde); }
 .pestanas button { background: none; border: 0; padding: 10px 18px; font-weight: 700; color: var(--azul-claro); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }

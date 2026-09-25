@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { sb } from '../lib/supabase'
-import type { PerfilUsuario, Permiso, Rol, RolPermiso } from '../types/database.types'
+import { zonaValida } from '../lib/fechas'
+import type { Pais, PerfilUsuario, Permiso, Rol, RolPermiso } from '../types/database.types'
 
 interface Datos {
   perfiles: PerfilUsuario[]
@@ -9,8 +10,13 @@ interface Datos {
   rolesPermisos: RolPermiso[]
 }
 
-export default function Administracion({ miId }: { miId: string }) {
-  const [pestana, setPestana] = useState<'usuarios' | 'roles'>('usuarios')
+const ZONAS_SUGERIDAS = [
+  'America/Managua', 'America/Panama', 'America/El_Salvador', 'America/Costa_Rica', 'America/Guatemala', 'America/Tegucigalpa',
+  'America/Bogota', 'America/Mexico_City', 'America/Santo_Domingo', 'America/Lima', 'America/Guayaquil', 'America/Caracas',
+]
+
+export default function Administracion({ miId, onPaisesCambiaron }: { miId: string; onPaisesCambiaron: () => void }) {
+  const [pestana, setPestana] = useState<'usuarios' | 'roles' | 'paises'>('usuarios')
   const [datos, setDatos] = useState<Datos | null>(null)
   const [error, setError] = useState('')
 
@@ -37,16 +43,114 @@ export default function Administracion({ miId }: { miId: string }) {
         <div className="pestanas">
           <button className={pestana === 'usuarios' ? 'activo' : ''} onClick={() => setPestana('usuarios')}>Usuarios</button>
           <button className={pestana === 'roles' ? 'activo' : ''} onClick={() => setPestana('roles')}>Roles y accesos</button>
+          <button className={pestana === 'paises' ? 'activo' : ''} onClick={() => setPestana('paises')}>Países</button>
         </div>
       </div>
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
-      {!datos ? (
+      {pestana === 'paises' ? (
+        <Paises onError={setError} onCambio={onPaisesCambiaron} />
+      ) : !datos ? (
         <div className="vacio">Cargando…</div>
       ) : pestana === 'usuarios' ? (
         <Usuarios datos={datos} miId={miId} onCambio={cargar} onError={setError} />
       ) : (
         <Roles datos={datos} onCambio={cargar} onError={setError} />
       )}
+    </>
+  )
+}
+
+function Paises({ onError, onCambio }: { onError: (m: string) => void; onCambio: () => void }) {
+  const [paises, setPaises] = useState<Pais[]>([])
+  const [codigo, setCodigo] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [zona, setZona] = useState('')
+  const [guardando, setGuardando] = useState(false)
+
+  const cargar = useCallback(async () => {
+    const { data, error } = await sb.from('paises').select('*').order('nombre', { ascending: true })
+    if (error) return onError(error.message)
+    setPaises(data ?? [])
+  }, [onError])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  async function agregar() {
+    onError('')
+    const c = codigo.trim().toUpperCase()
+    const n = nombre.trim()
+    const z = zona.trim()
+    if (!/^[A-Z]{2,3}$/.test(c)) return onError('El código debe tener 2 o 3 letras (por ejemplo GT).')
+    if (!n) return onError('El nombre es obligatorio.')
+    if (!zonaValida(z)) return onError('La zona horaria no es válida. Usa un nombre IANA, por ejemplo America/Guatemala.')
+    setGuardando(true)
+    const { error } = await sb.from('paises').insert({ codigo: c, nombre: n, zona_horaria: z })
+    setGuardando(false)
+    if (error) return onError(error.code === '23505' ? 'Ya existe un país con ese código o nombre.' : error.message)
+    setCodigo('')
+    setNombre('')
+    setZona('')
+    await cargar()
+    onCambio()
+  }
+
+  async function alternar(p: Pais) {
+    const { error } = await sb.from('paises').update({ activo: !p.activo }).eq('id', p.id)
+    if (error) return onError(error.message)
+    await cargar()
+    onCambio()
+  }
+
+  return (
+    <>
+      <div className="aviso info" style={{ marginBottom: 12 }}>
+        Cada país tiene sus propios registros y cargas de la bitácora, y usa su zona horaria para mostrar fechas y horas. Un país inactivo deja de aparecer en la pantalla inicial, pero conserva su información.
+      </div>
+      <div className="tarjeta">
+        <div className="tabla-envoltorio">
+          <table className="sin-clic">
+            <thead>
+              <tr><th>Código</th><th>País</th><th>Zona horaria</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              {paises.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.codigo}</td>
+                  <td>{p.nombre}</td>
+                  <td>{p.zona_horaria}</td>
+                  <td>
+                    <label className="interruptor">
+                      <input type="checkbox" checked={p.activo} onChange={() => alternar(p)} />
+                      {p.activo ? 'Activo' : 'Inactivo'}
+                    </label>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="tarjeta grupo" style={{ marginTop: 16 }}>
+        <h3>Agregar país</h3>
+        <div className="rejilla" style={{ gridTemplateColumns: '120px 1fr 1fr auto', alignItems: 'end' }}>
+          <div className="campo">
+            <label htmlFor="pais-cod">Código</label>
+            <input id="pais-cod" value={codigo} maxLength={3} placeholder="GT" onChange={(e) => setCodigo(e.target.value)} />
+          </div>
+          <div className="campo">
+            <label htmlFor="pais-nom">Nombre</label>
+            <input id="pais-nom" value={nombre} placeholder="Guatemala" onChange={(e) => setNombre(e.target.value)} />
+          </div>
+          <div className="campo">
+            <label htmlFor="pais-zona">Zona horaria</label>
+            <input id="pais-zona" list="zonas-sugeridas" value={zona} placeholder="America/Guatemala" onChange={(e) => setZona(e.target.value)} />
+            <datalist id="zonas-sugeridas">{ZONAS_SUGERIDAS.map((z) => <option key={z} value={z} />)}</datalist>
+          </div>
+          <button className="btn" onClick={agregar} disabled={guardando}>Agregar</button>
+        </div>
+      </div>
     </>
   )
 }
