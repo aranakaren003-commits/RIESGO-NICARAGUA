@@ -69,6 +69,75 @@ function generarClave(): string {
   return Array.from(bytes, (b) => letras[b % letras.length]).join('') + '#7'
 }
 
+// Llama a la función de administración de usuarios. Devuelve el mensaje de error, o null si salió bien.
+async function invocarAdmin(body: Record<string, unknown>): Promise<string | null> {
+  const { data, error } = await sb.functions.invoke('crear-usuario', { body })
+  if (error) {
+    let detalle = error.message
+    const ctx = (error as { context?: Response }).context
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        detalle = ((await ctx.json()) as { error?: string }).error ?? detalle
+      } catch {
+        // se deja el mensaje genérico
+      }
+    }
+    return detalle
+  }
+  return (data as { error?: string } | null)?.error ?? null
+}
+
+function RestablecerClave({ perfil, onCerrar }: { perfil: PerfilUsuario; onCerrar: () => void }) {
+  const [clave, setClave] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const [listo, setListo] = useState<string | null>(null)
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (clave.length < 8) return setError('La contraseña temporal debe tener al menos 8 caracteres.')
+    setGuardando(true)
+    const fallo = await invocarAdmin({ accion: 'restablecer', user_id: perfil.user_id, password: clave })
+    setGuardando(false)
+    if (fallo) return setError(fallo)
+    setListo(clave)
+  }
+
+  return (
+    <div className="velo centrado" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
+      <form className="tarjeta grupo modal" onSubmit={enviar} role="dialog" aria-modal="true">
+        <h3>Restablecer contraseña</h3>
+        <p style={{ margin: '0 0 12px' }}>{perfil.email}{perfil.nombre ? ` · ${perfil.nombre}` : ''}</p>
+        {listo ? (
+          <>
+            <div className="aviso ok" style={{ marginBottom: 12 }}>
+              Contraseña restablecida. Contraseña temporal: <strong>{listo}</strong> (cópiala ahora; no se vuelve a mostrar). En su próximo ingreso deberá cambiarla.
+            </div>
+            <button type="button" className="btn" onClick={onCerrar}>Cerrar</button>
+          </>
+        ) : (
+          <>
+            <div className="campo" style={{ marginBottom: 12 }}>
+              <label htmlFor="rc-clave">Contraseña temporal nueva</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}><CampoClave id="rc-clave" value={clave} onChange={setClave} autoComplete="new-password" minLength={8} required /></div>
+                <button type="button" className="btn secundario" onClick={() => setClave(generarClave())}>Generar</button>
+              </div>
+            </div>
+            <div className="aviso info" style={{ marginBottom: 12 }}>La contraseña anterior deja de servir y el usuario deberá cambiar esta en su próximo ingreso.</div>
+            {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="barra" style={{ marginBottom: 0 }}>
+              <button className="btn" disabled={guardando}>{guardando ? 'Guardando…' : 'Restablecer'}</button>
+              <button type="button" className="btn secundario" onClick={onCerrar}>Cancelar</button>
+            </div>
+          </>
+        )}
+      </form>
+    </div>
+  )
+}
+
 function NuevoUsuario({ roles, onCreado }: { roles: Rol[]; onCreado: () => void }) {
   const rolPorDefecto = roles.find((r) => r.nombre === 'Consulta')?.id ?? roles[0]?.id ?? ''
   const [usuario, setUsuario] = useState('')
@@ -94,21 +163,9 @@ function NuevoUsuario({ roles, onCreado }: { roles: Rol[]; onCreado: () => void 
     const email = `${local}${DOMINIO}`
 
     setGuardando(true)
-    const { data, error } = await sb.functions.invoke('crear-usuario', { body: { email, nombre: nombre.trim(), id_rol: idRol, password: clave } })
+    const fallo = await invocarAdmin({ accion: 'crear', email, nombre: nombre.trim(), id_rol: idRol, password: clave })
     setGuardando(false)
-    if (error) {
-      let detalle = error.message
-      const ctx = (error as { context?: Response }).context
-      if (ctx && typeof ctx.json === 'function') {
-        try {
-          detalle = ((await ctx.json()) as { error?: string }).error ?? detalle
-        } catch {
-          // se deja el mensaje genérico
-        }
-      }
-      return setError(detalle)
-    }
-    if ((data as { error?: string } | null)?.error) return setError((data as { error: string }).error)
+    if (fallo) return setError(fallo)
     setCreado({ email, clave })
     setUsuario('')
     setNombre('')
@@ -261,6 +318,7 @@ function Usuarios({ datos, miId, onCambio, onError }: { datos: Datos; miId: stri
     await onCambio()
   }
 
+  const [restableciendo, setRestableciendo] = useState<PerfilUsuario | null>(null)
   const pendientes = datos.perfiles.filter((p) => !p.activo).length
 
   return (
@@ -281,6 +339,7 @@ function Usuarios({ datos, miId, onCambio, onError }: { datos: Datos; miId: stri
                 <th>Rol</th>
                 <th>Activo</th>
                 <th>Alta</th>
+                <th>Contraseña</th>
               </tr>
             </thead>
             <tbody>
@@ -309,6 +368,12 @@ function Usuarios({ datos, miId, onCambio, onError }: { datos: Datos; miId: stri
                       </label>
                     </td>
                     <td>{new Date(p.creado_en).toLocaleDateString('es-NI', { timeZone: 'America/Managua' })}</td>
+                    <td>
+                      <button className="btn secundario" disabled={soyYo} onClick={() => setRestableciendo(p)} title={soyYo ? 'Tu propia contraseña no se restablece desde aquí' : undefined}>
+                        Restablecer
+                      </button>
+                      {p.debe_cambiar_clave && <span className="chip mal" style={{ marginLeft: 8 }} title="Debe cambiar la contraseña en su próximo ingreso">Cambio pendiente</span>}
+                    </td>
                   </tr>
                 )
               })}
@@ -317,6 +382,15 @@ function Usuarios({ datos, miId, onCambio, onError }: { datos: Datos; miId: stri
         </div>
         <div className="pie"><span>Tu propio usuario no se puede modificar desde aquí para evitar quedarte sin acceso.</span></div>
       </div>
+      {restableciendo && (
+        <RestablecerClave
+          perfil={restableciendo}
+          onCerrar={() => {
+            setRestableciendo(null)
+            onCambio()
+          }}
+        />
+      )}
     </>
   )
 }

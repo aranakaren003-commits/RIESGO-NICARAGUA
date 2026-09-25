@@ -1,4 +1,7 @@
-// Crea un usuario con correo @instacredit.com. Solo puede invocarla un administrador (permiso admin.usuarios).
+// Alta de usuarios @instacredit.com y restablecimiento de contraseña. Solo puede invocarla un administrador (permiso admin.usuarios).
+// Body: { accion?: 'crear' | 'restablecer', ... }
+//   crear:        { email, nombre, id_rol, password }
+//   restablecer:  { user_id, password }
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const DOMINIO = '@instacredit.com'
@@ -23,7 +26,9 @@ Deno.serve(async (req: Request) => {
   // 1. Quién llama: debe ser administrador activo
   const llamador = createClient(url, anon, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
   const { data: esAdmin, error: errAdmin } = await llamador.rpc('usuario_es_admin')
-  if (errAdmin || !esAdmin) return json({ error: 'Solo un administrador puede crear usuarios.' }, 403)
+  if (errAdmin || !esAdmin) return json({ error: 'Solo un administrador puede realizar esta acción.' }, 403)
+  const { data: quien } = await llamador.auth.getUser()
+  const idLlamador = quien.user?.id
 
   // 2. Datos
   let cuerpo: Record<string, unknown>
@@ -32,17 +37,35 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: 'Solicitud inválida.' }, 400)
   }
+  const accion = String(cuerpo.accion ?? 'crear')
+  const password = String(cuerpo.password ?? '')
+  if (password.length < 8) return json({ error: 'La contraseña temporal debe tener al menos 8 caracteres.' }, 400)
+
+  const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
+
+  // 3a. Restablecer contraseña de un usuario existente
+  if (accion === 'restablecer') {
+    const userId = String(cuerpo.user_id ?? '')
+    if (!userId) return json({ error: 'Falta el usuario.' }, 400)
+    if (userId === idLlamador) return json({ error: 'Tu propia contraseña no se restablece desde aquí.' }, 400)
+
+    const { data: perfil } = await admin.from('perfiles_usuario').select('user_id').eq('user_id', userId).maybeSingle()
+    if (!perfil) return json({ error: 'El usuario no existe.' }, 404)
+
+    const { error: errClave } = await admin.auth.admin.updateUserById(userId, { password })
+    if (errClave) return json({ error: errClave.message }, 400)
+    const { error: errFlag } = await admin.from('perfiles_usuario').update({ debe_cambiar_clave: true }).eq('user_id', userId)
+    if (errFlag) return json({ error: `La contraseña cambió, pero no se pudo exigir el cambio en el próximo ingreso: ${errFlag.message}` }, 500)
+    return json({ ok: true, user_id: userId })
+  }
+
+  // 3b. Crear usuario (correo ya confirmado) y completar su perfil
   const email = String(cuerpo.email ?? '').trim().toLowerCase()
   const nombre = String(cuerpo.nombre ?? '').trim()
   const idRol = String(cuerpo.id_rol ?? '')
-  const password = String(cuerpo.password ?? '')
-
   if (!/^[^@\s]+@instacredit\.com$/.test(email)) return json({ error: `El correo debe tener el dominio ${DOMINIO}.` }, 400)
   if (!idRol) return json({ error: 'Selecciona un rol.' }, 400)
-  if (password.length < 8) return json({ error: 'La contraseña temporal debe tener al menos 8 caracteres.' }, 400)
 
-  // 3. Crear el usuario (correo ya confirmado) y completar su perfil
-  const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
   const { data: creado, error: errCrear } = await admin.auth.admin.createUser({
     email,
     password,
