@@ -11,6 +11,9 @@ export const P = {
   dashboardDescargar: 'dashboard.descargar',
   adminFormulario: 'admin.formulario',
   adminUsuarios: 'admin.usuarios',
+  casosSospechaVer: 'casos.sospecha.ver',
+  casosNumeroEquivocadoVer: 'casos.numero_equivocado.ver',
+  adminVistaPrevia: 'admin.vista_previa',
 } as const
 
 export type Permisos = ReadonlySet<string>

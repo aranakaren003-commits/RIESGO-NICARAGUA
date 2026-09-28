@@ -10,8 +10,9 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
-  source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora (editable salvo readOnly); manual = lo ingresa el usuario
-  readOnly?: boolean
+  source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora; manual = lo ingresa el usuario
+  readOnly?: boolean // nunca editable
+  fijoEnEdicion?: boolean // editable solo al crear un registro nuevo; fijo al editar uno ya existente (viene de la bitácora)
   visibleSi?: { campo: FieldKey; valor: string } // el campo solo aparece (y es obligatorio) cuando otro campo tiene ese valor
 }
 
@@ -30,6 +31,8 @@ export function esProducto(tipoCredito: string | null | undefined, tipo: TipoPro
 }
 
 const BMR = ['BUENO', 'REGULAR', 'MALO']
+// Pendiente: el administrador debe dar la lista definitiva de opciones de queja.
+const QUEJA_OPCIONES: string[] = []
 
 const f = (
   key: FieldKey,
@@ -46,6 +49,7 @@ export const ESTATUS_LLAMADA = [
   'NO CONTESTA',
   'BUZON',
   'DEVOLVER LLAMADA',
+  'NUMERO EQUIVOCADO',
   'NO FORMALIZA',
   'DUPLICADO',
   'ANULADO',
@@ -54,17 +58,17 @@ export const ESTATUS_LLAMADA = [
 
 export const FIELD_GROUPS: FieldGroup[] = [
   {
+    // Todos estos campos vienen de la bitácora: fijos al editar un registro existente, editables solo al crear uno nuevo a mano.
     title: 'Cliente y solicitud',
     fields: [
-      f('num', 'A', 'NÚM', 'number', 'bitacora', { readOnly: true }),
-      f('cliente', 'B', 'CLIENTE', 'text', 'bitacora'),
-      f('estado', 'C', 'ESTADO', 'text', 'bitacora'),
-      f('informa', 'D', 'INFORMA', 'text', 'bitacora'),
-      f('numero_solicitud', 'E', 'NUMERO DE SOLICITUD', 'number', 'bitacora'),
-      f('cedula', 'F', 'CEDULA', 'text', 'bitacora'),
-      f('telefono', 'G', 'TELEFONO', 'text', 'bitacora'),
-      f('lugar_trabajo', 'H', 'LUGAR DONDE TRABAJA', 'text', 'bitacora'),
-      f('fecha_formalizado', 'I', 'FECHA DE FORMALIZADO', 'datetime', 'bitacora'),
+      f('cliente', 'B', 'CLIENTE', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('estado', 'C', 'ESTADO', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('informa', 'D', 'INFORMA', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('numero_solicitud', 'E', 'NUMERO DE SOLICITUD', 'number', 'bitacora', { fijoEnEdicion: true }),
+      f('cedula', 'F', 'CEDULA', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('telefono', 'G', 'TELEFONO', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('lugar_trabajo', 'H', 'LUGAR DONDE TRABAJA', 'text', 'bitacora', { fijoEnEdicion: true }),
+      f('fecha_formalizado', 'I', 'FECHA DE FORMALIZADO', 'datetime', 'bitacora', { fijoEnEdicion: true }),
     ],
   },
   {
@@ -75,6 +79,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual', { readOnly: true }),
       // La llamada se devolverá en esta fecha y hora: la línea sube en la cola desde 5 minutos antes
       f('devolver_llamada_en', '', 'FECHA Y HORA PARA DEVOLVER LA LLAMADA', 'datetime', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'DEVOLVER LLAMADA' } }),
+      // A quién pertenece el número, cuando el estatus es NUMERO EQUIVOCADO
+      f('numero_pertenece_a', '', 'A QUIÉN PERTENECE EL NÚMERO', 'text', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'NUMERO EQUIVOCADO' } }),
     ],
   },
   {
@@ -119,14 +125,6 @@ export const FIELD_GROUPS: FieldGroup[] = [
     ],
   },
   {
-    title: 'Verificación',
-    obligatorioEn: 'pyme',
-    fields: [
-      f('pregunta_ag', 'AG', 'SI , NO', 'sino', 'manual', { caption: 'CRÉDITO VERIFICADO' }),
-      f('pregunta_ah', 'AH', 'SI , NO', 'sino', 'manual', { caption: 'ANALISTA' }),
-    ],
-  },
-  {
     title: 'Cierre y observaciones',
     fields: [
       f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
@@ -150,6 +148,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
       // Si es SI, la línea se resalta en rojo tenue en las tablas y queda disponible para análisis por promotor, canal y solicitud
       f('caso_sospecha', '', 'CASO TIENE SOSPECHA', 'sino', 'manual'),
+      // TODO: opciones pendientes de definir por el administrador (pidió dar la lista después)
+      f('queja', '', 'QUEJA', 'select', 'manual', { options: QUEJA_OPCIONES }),
     ],
   },
 ]
@@ -158,7 +158,8 @@ export const ALL_FIELDS: FieldDef[] = FIELD_GROUPS.flatMap((g) => g.fields)
 export const MANUAL_FIELDS = ALL_FIELDS.filter((x) => x.source === 'manual')
 
 export function encuestaProgreso(r: Llamada): { llenos: number; total: number } {
-  const campos = MANUAL_FIELDS.filter((x) => x.key !== 'estatus_llamada' && x.key !== 'comentario_llamada' && x.key !== 'fecha_hora_llamada' && x.key !== 'devolver_llamada_en' && x.key !== 'caso_sospecha')
+  const excluidos: FieldKey[] = ['estatus_llamada', 'comentario_llamada', 'fecha_hora_llamada', 'devolver_llamada_en', 'caso_sospecha', 'numero_pertenece_a', 'queja']
+  const campos = MANUAL_FIELDS.filter((x) => !excluidos.includes(x.key))
   const llenos = campos.filter((x) => {
     const v = r[x.key]
     return v !== null && v !== ''

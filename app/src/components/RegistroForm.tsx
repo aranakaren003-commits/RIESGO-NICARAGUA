@@ -8,8 +8,8 @@ import type { Database, Llamada } from '../types/database.types'
 type Update = Database['public']['Tables']['llamadas_bienvenida']['Update']
 type Insert = Database['public']['Tables']['llamadas_bienvenida']['Insert']
 
-// Resultados posibles cuando el cliente contesta (el Digitador elige uno; DEVOLVER LLAMADA exige fecha y hora)
-const ESTATUS_FINAL = ['ACEPTACION', 'NO ACEPTACION', 'DEVOLVER LLAMADA']
+// Resultados posibles cuando el cliente contesta (el Digitador elige uno; DEVOLVER LLAMADA y NUMERO EQUIVOCADO exigen un dato adicional)
+const ESTATUS_FINAL = ['ACEPTACION', 'NO ACEPTACION', 'DEVOLVER LLAMADA', 'NUMERO EQUIVOCADO']
 
 interface Props {
   registro: Llamada | null // null = registro nuevo
@@ -123,7 +123,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
   function campo(f: FieldDef, obligatorio: boolean) {
     const id = `f-${f.key}`
     const v = valores[f.key]
-    const bloqueado = f.readOnly || (f.key === 'numero_solicitud' && !!registro)
+    const bloqueado = f.readOnly || (f.fijoEnEdicion && !!registro)
     let control
     if (f.type === 'select') {
       const opciones = modoDigitador && f.key === 'estatus_llamada' ? ESTATUS_FINAL : f.options
@@ -153,8 +153,8 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
         <input
           id={id}
           type={tipo}
-          value={f.key === 'num' && !registro ? '' : v}
-          placeholder={f.key === 'num' ? 'Automático' : f.key === 'fecha_hora_llamada' ? 'Se registra con el primer intento' : ''}
+          value={v}
+          placeholder={f.key === 'fecha_hora_llamada' ? 'Se registra con el primer intento' : ''}
           disabled={bloqueado}
           onChange={(e) => cambia(f.key, e.target.value)}
         />
@@ -183,7 +183,9 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
         </div>
         <fieldset className="panel-cuerpo" disabled={soloLectura}>
           {FIELD_GROUPS.map((g) => {
-            const origen = g.fields.every((f) => f.source === 'bitacora') ? 'bitacora' : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
+            const todoBitacora = g.fields.every((f) => f.source === 'bitacora')
+            const todoFijo = todoBitacora && g.fields.every((f) => f.readOnly || f.fijoEnEdicion)
+            const origen = todoBitacora ? (todoFijo ? 'bitacora-fijo' : 'bitacora') : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
             const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
             const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
             return (
@@ -191,6 +193,9 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
                 <h3>
                   {g.title}
                   {origen === 'bitacora' && <span className="etiqueta-origen bitacora">Desde bitácora · editable</span>}
+                  {origen === 'bitacora-fijo' && (
+                    <span className="etiqueta-origen bitacora">{registro ? 'Desde bitácora · fijo' : 'Desde bitácora · editable al crear'}</span>
+                  )}
                   {origen === 'manual' && <span className="etiqueta-origen manual">Ingreso del usuario</span>}
                   {g.aplicaA && !aplica && <span className="etiqueta-origen bitacora">Solo aplica a créditos de tipo {g.aplicaA.toUpperCase()}</span>}
                   {grupoPide && <span className="etiqueta-origen obligatorio">Obligatorio para {g.obligatorioEn?.toUpperCase()}</span>}

@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { sb } from './lib/supabase'
 import { P, type Permisos } from './lib/permisos'
 import { PaisContext, guardarPaisRegional, leerPaisRegional } from './lib/pais'
-import type { Pais, PerfilUsuario } from './types/database.types'
+import type { Pais, PerfilUsuario, Rol } from './types/database.types'
 import Login from './components/Login'
 import Gestion from './components/Gestion'
 import Registros from './components/Registros'
@@ -13,16 +13,22 @@ import Intentos from './components/Intentos'
 import Administracion from './components/Administracion'
 import CambiarClave from './components/CambiarClave'
 import Bandera from './components/Bandera'
+import CasosSospecha from './components/CasosSospecha'
+import NumeroEquivocado from './components/NumeroEquivocado'
+import VistaPrevia from './components/VistaPrevia'
 
-type Vista = 'gestion' | 'registros' | 'dashboard' | 'intentos' | 'importar' | 'admin'
+type Vista = 'gestion' | 'registros' | 'dashboard' | 'intentos' | 'importar' | 'sospecha' | 'numero_equivocado' | 'admin' | 'vista_previa'
 
 const VISTAS: { id: Vista; titulo: string; permiso: string }[] = [
   { id: 'gestion', titulo: 'Llamadas', permiso: P.gestionLlamadas },
   { id: 'registros', titulo: 'Registros', permiso: P.registrosVer },
+  { id: 'sospecha', titulo: 'Casos sospechosos', permiso: P.casosSospechaVer },
+  { id: 'numero_equivocado', titulo: 'Número equivocado', permiso: P.casosNumeroEquivocadoVer },
   { id: 'dashboard', titulo: 'Dashboard', permiso: P.graficasVer },
   { id: 'intentos', titulo: 'Bitácora de intentos', permiso: P.intentosVer },
   { id: 'importar', titulo: 'Importar bitácora', permiso: P.bitacoraImportar },
   { id: 'admin', titulo: 'Administración', permiso: P.adminUsuarios },
+  { id: 'vista_previa', titulo: 'Vista de prueba', permiso: P.adminVistaPrevia },
 ]
 
 function Bloqueo({ titulo, texto, onSalir }: { titulo: string; texto: string; onSalir: () => void }) {
@@ -46,6 +52,7 @@ export default function App() {
   const [cargandoPerfil, setCargandoPerfil] = useState(false)
   const [vista, setVista] = useState<Vista | null>(null)
   const [paisRegionalId, setPaisRegionalId] = useState<string | null>(leerPaisRegional())
+  const [vistaPrevia, setVistaPrevia] = useState<{ rol: Rol; permisos: Permisos } | null>(null)
 
   useEffect(() => {
     sb.auth.getSession().then(({ data }) => {
@@ -78,6 +85,12 @@ export default function App() {
 
   const salir = () => sb.auth.signOut()
 
+  async function activarVistaPrevia(rol: Rol) {
+    const { data } = await sb.from('roles_permisos').select('codigo_permiso').eq('id_rol', rol.id)
+    setVistaPrevia({ rol, permisos: new Set((data ?? []).map((r) => r.codigo_permiso)) })
+    setVista(null)
+  }
+
   if (!listo) return <div className="vacio">Cargando…</div>
   if (!sesion) return <Login />
   if (cargandoPerfil) return <div className="vacio">Cargando…</div>
@@ -86,7 +99,9 @@ export default function App() {
     return <CambiarClave email={sesion.user.email} onListo={() => setPerfil({ ...perfil, debe_cambiar_clave: false })} onSalir={salir} />
   }
 
-  const visibles = VISTAS.filter((v) => permisos.has(v.permiso))
+  // Vista de prueba: el menú se calcula con los permisos del puesto elegido, pero los datos se siguen leyendo con los permisos reales del administrador.
+  const permisosEfectivos = vistaPrevia ? vistaPrevia.permisos : permisos
+  const visibles = VISTAS.filter((v) => permisosEfectivos.has(v.permiso) && (!vistaPrevia || v.id !== 'vista_previa'))
   if (!perfil?.activo || visibles.length === 0) {
     return (
       <Bloqueo
@@ -123,6 +138,12 @@ export default function App() {
         },
       }}
     >
+      {vistaPrevia && (
+        <div className="banda-vista-previa">
+          Vista de prueba: viendo el menú como <strong>{vistaPrevia.rol.nombre}</strong>. Los datos siguen usando tus permisos reales de administrador.
+          <button className="btn claro" onClick={() => setVistaPrevia(null)}>Salir de la vista de prueba</button>
+        </div>
+      )}
       <header className="header">
         <div className="marca">
           <span className="marca-pais">
@@ -162,10 +183,13 @@ export default function App() {
         {/* key = país: al cambiar de país se reinician filtros y datos */}
         {actual.id === 'gestion' && <Gestion key={pais.id} />}
         {actual.id === 'registros' && <Registros key={pais.id} permisos={permisos} />}
+        {actual.id === 'sospecha' && <CasosSospecha key={pais.id} permisos={permisos} />}
+        {actual.id === 'numero_equivocado' && <NumeroEquivocado key={pais.id} permisos={permisos} />}
         {actual.id === 'dashboard' && <Dashboard key={pais.id} permisos={permisos} />}
         {actual.id === 'intentos' && <Intentos key={pais.id} />}
         {actual.id === 'importar' && <Importar key={pais.id} />}
         {actual.id === 'admin' && <Administracion miId={sesion.user.id} miPerfil={perfil} permisos={permisos} onPaisesCambiaron={cargarPaises} />}
+        {actual.id === 'vista_previa' && <VistaPrevia onActivar={activarVistaPrevia} />}
       </main>
     </PaisContext.Provider>
   )

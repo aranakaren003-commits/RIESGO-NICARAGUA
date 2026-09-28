@@ -169,6 +169,11 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .correo-dominio input { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .correo-dominio span { display: flex; align-items: center; padding: 0 12px; background: #eef1f4; border: 1px solid var(--gris-borde); border-left: 0; border-radius: 0 8px 8px 0; color: var(--azul-claro); font-weight: 600; }
 
+.banda-vista-previa {
+  background: #402b00; color: #ffe066; padding: 8px 24px; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600;
+}
+.banda-vista-previa .btn.claro { border-color: #ffe06655; margin-left: auto; }
+
 /* Encabezado con bandera y pestañas de país (perfiles regionales) */
 .marca-pais { display: inline-flex; align-items: center; gap: 10px; }
 .marca .suave { color: var(--verde-claro); font-weight: 500; }

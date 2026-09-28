@@ -151,6 +151,7 @@ export default function Gestion() {
               <tr>
                 <th>CLIENTE</th>
                 <th>TIPO DE CRÉDITO</th>
+                <th>LLAVE DE CRÉDITO</th>
                 <th>TELEFONO</th>
                 <th>FECHA DE FORMALIZADO</th>
                 <th>ESTATUS DE LLAMADA</th>
@@ -165,6 +166,7 @@ export default function Gestion() {
                     {f.caso_sospecha === 'SI' && <span className="chip mal" style={{ marginLeft: 8 }}>Sospecha</span>}
                   </td>
                   <td>{f.tipo_credito}</td>
+                  <td>{f.llave_credito}</td>
                   <td>{f.telefono}</td>
                   <td>{fmtFechaHora(f.fecha_formalizado, tz)}</td>
                   <td>

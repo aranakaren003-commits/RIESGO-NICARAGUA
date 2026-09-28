@@ -19,6 +19,8 @@ export type Llamada = {
   devolver_llamada_en: string | null
   caso_sospecha: string | null
   adquirio_asistencia: string | null
+  numero_pertenece_a: string | null
+  queja: string | null
   tipo_credito: string | null
   promotor: string | null
   categorizacion: string | null
@@ -93,6 +95,7 @@ export type VCola = {
   estatus_llamada: string | null
   caso_sospecha: string | null
   devolver_llamada_en: string | null
+  llave_credito: string | null
   intentos: number
   orden_estatus: number // 0 = devolver llamada vigente, 1 sin asignar, 2 no contesta, 3 buzón, 4 devolver llamada futura
 }
