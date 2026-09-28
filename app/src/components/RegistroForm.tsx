@@ -177,7 +177,6 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
       <div className="panel" role="dialog" aria-modal="true">
         <div className="panel-cab">
           <h2>{registro ? `${registro.cliente}` : 'Nuevo registro'}</h2>
-          {registro && <span className="chip neutro">NÚM {registro.num}</span>}
           <div className="espacio" />
           <button className="btn secundario" onClick={onClose}>Cerrar</button>
         </div>
