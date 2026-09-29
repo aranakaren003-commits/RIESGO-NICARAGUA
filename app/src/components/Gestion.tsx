@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { sb } from '../lib/supabase'
 import { fmtFechaHora, hoyEn } from '../lib/fechas'
 import { usePais } from '../lib/pais'
-import type { Llamada, VCola } from '../types/database.types'
+import type { Llamada, ResumenEstatusPeriodo, VCola } from '../types/database.types'
 import RegistroForm from './RegistroForm'
 
 const TAM = 50
@@ -51,6 +51,7 @@ export default function Gestion() {
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState<Abierto | null>(null)
   const [idCarga, setIdCarga] = useState<string | null>(null)
+  const [resumen, setResumen] = useState<ResumenEstatusPeriodo | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -68,6 +69,20 @@ export default function Gestion() {
       .limit(1)
       .then(({ data }) => setIdCarga(data?.[0]?.id ?? null))
   }, [pais.id])
+
+  useEffect(() => {
+    if (!periodo) {
+      setResumen(null)
+      return
+    }
+    let activo = true
+    sb.rpc('resumen_estatus_periodo', { p_pais: pais.id, p_periodo: periodo }).then(({ data }) => {
+      if (activo) setResumen((data as unknown as ResumenEstatusPeriodo[] | null)?.[0] ?? null)
+    })
+    return () => {
+      activo = false
+    }
+  }, [pais.id, periodo])
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -159,6 +174,29 @@ export default function Gestion() {
       </div>
 
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
+
+      {resumen && (
+        <div className="resumen-periodo">
+          <span className="resumen-titulo">% de estatus de llamada · {periodo} (cierre día 4, base: {resumen.total_base.toLocaleString('es-NI')})</span>
+          <div className="resumen-chips">
+            {(
+              [
+                ['Aceptación', resumen.aceptacion],
+                ['No aceptación', resumen.no_aceptacion],
+                ['Buzón', resumen.buzon],
+                ['No contesta', resumen.no_contesta],
+                ['Devolver llamada', resumen.devolver_llamada],
+                ['Número equivocado', resumen.numero_equivocado],
+                ['Sin estatus', resumen.sin_estatus],
+              ] as [string, number][]
+            ).map(([nombre, n]) => (
+              <span key={nombre} className="chip neutro">
+                {nombre}: {resumen.total_base ? Math.round((n / resumen.total_base) * 100) : 0}% ({n})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="leyenda-cola">
         <span className="muestra devolver" /> Devolver llamada vigente (desde 10 minutos antes de la hora acordada)

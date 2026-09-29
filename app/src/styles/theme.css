@@ -199,6 +199,9 @@ tbody tr.fila-devolver td { background: #e3e9f2; }
 tbody tr.fila-devolver:hover td { background: #cddbef; }
 .devolver-hora { font-size: 12px; font-weight: 700; color: var(--azul); white-space: nowrap; }
 .devolver-hora.ya { background: var(--azul-claro); color: #fff; padding: 2px 8px; border-radius: 999px; }
+.resumen-periodo { background: #fff; border: 1px solid var(--gris-borde); border-radius: var(--radio); padding: 10px 14px; margin-bottom: 12px; }
+.resumen-titulo { display: block; font-size: 11px; font-weight: 700; color: var(--azul-claro); margin-bottom: 6px; }
+.resumen-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .leyenda-cola { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--azul-claro); }
 .leyenda-cola .muestra { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--gris-borde); margin-right: -10px; }
 .leyenda-cola .muestra.devolver { background: #e3e9f2; }
