@@ -125,7 +125,20 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     const v = valores[f.key]
     const bloqueado = f.readOnly || (f.fijoEnEdicion && !!registro)
     let control
-    if (f.type === 'select') {
+    if (f.type === 'select' && f.groupedOptions) {
+      const todas = f.groupedOptions.flatMap((g) => g.opciones)
+      control = (
+        <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
+          <option value="">—</option>
+          {f.groupedOptions.map((g) => (
+            <optgroup key={g.categoria} label={g.categoria}>
+              {g.opciones.map((o) => <option key={o} value={o}>{o}</option>)}
+            </optgroup>
+          ))}
+          {v && !todas.includes(v) && <option value={v}>{v}</option>}
+        </select>
+      )
+    } else if (f.type === 'select') {
       const opciones = modoDigitador && f.key === 'estatus_llamada' ? ESTATUS_FINAL : f.options
       control = (
         <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
@@ -154,19 +167,28 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
           id={id}
           type={tipo}
           value={v}
-          placeholder={f.key === 'fecha_hora_llamada' ? 'Se registra con el primer intento' : ''}
+          placeholder={
+            f.key === 'fecha_hora_primera_gestion'
+              ? 'Se registra con el primer intento'
+              : f.key === 'fecha_hora_ultima_gestion'
+                ? 'Se registra con cada gestión'
+                : ''
+          }
           disabled={bloqueado}
           onChange={(e) => cambia(f.key, e.target.value)}
         />
       )
     }
+    // En los campos si/no, la etiqueta en negrita es la pregunta (f.caption); se omite el nombre técnico de columna ("SI , NO").
+    const tituloVisible = f.type === 'sino' ? (f.caption ?? f.label) : f.label
+    const preguntaSecundaria = f.type === 'sino' ? null : f.caption
     return (
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
         <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
-          {f.label}
+          {tituloVisible}
           {obligatorio && <span className="req" title="Obligatorio"> *</span>}
         </label>
-        {f.caption && <div className="pregunta">{f.caption}</div>}
+        {preguntaSecundaria && <div className="pregunta">{preguntaSecundaria}</div>}
         {control}
       </div>
     )

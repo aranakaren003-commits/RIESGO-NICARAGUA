@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { sb } from '../lib/supabase'
-import { fmtFechaHora } from '../lib/fechas'
+import { fmtFechaHora, hoyEn } from '../lib/fechas'
 import { usePais } from '../lib/pais'
 import type { Llamada, VCola } from '../types/database.types'
 import RegistroForm from './RegistroForm'
@@ -23,10 +23,23 @@ const SEGMENTOS: { valor: string; titulo: string }[] = [
 
 const REFRESCO_MS = 60_000 // las devoluciones de llamada suben en la cola conforme se acerca su hora
 
+function periodosRecientes(tz: string, cuantos = 12): string[] {
+  const hoy = hoyEn(tz)
+  const [anio, mes] = hoy.split('-').map(Number)
+  const out: string[] = []
+  for (let i = 0; i < cuantos; i++) {
+    const d = new Date(Date.UTC(anio, mes - 1 - i, 1))
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+  return out
+}
+
 // Cola de trabajo del Digitador: solo líneas sin gestionar. Cada selección de la lista es un intento.
 export default function Gestion() {
   const { pais } = usePais()
   const tz = pais.zona_horaria
+  const periodos = useMemo(() => periodosRecientes(tz), [tz])
+  const [periodo, setPeriodo] = useState(periodos[0])
   const [texto, setTexto] = useState('')
   const [textoInput, setTextoInput] = useState('')
   const [segmento, setSegmento] = useState('')
@@ -60,6 +73,7 @@ export default function Gestion() {
     setCargando(true)
     setError('')
     let q = sb.from('v_cola_llamadas').select('*', { count: 'exact' }).eq('id_pais', pais.id)
+    if (periodo) q = q.eq('periodo', periodo)
     const t = texto.trim()
     if (t) q = q.ilike('cedula', `%${t}%`)
     if (segmento === 'sin') q = q.is('estatus_llamada', null)
@@ -74,7 +88,7 @@ export default function Gestion() {
     setFilas(data ?? [])
     setTotal(count ?? 0)
     setCargando(false)
-  }, [pais.id, texto, segmento, pagina])
+  }, [pais.id, periodo, texto, segmento, pagina])
 
   useEffect(() => {
     cargar()
@@ -94,7 +108,7 @@ export default function Gestion() {
       setOcupado(null)
       return setError(error.message)
     }
-    const r = data as { fecha_hora_llamada: string | null; id_intento: string } | null
+    const r = data as { id_intento: string } | null
 
     if (resultado === 'CONTESTA') {
       const { data: reg, error: e2 } = await sb.from('llamadas_bienvenida').select('*').eq('id', fila.id).maybeSingle()
@@ -113,8 +127,15 @@ export default function Gestion() {
     <>
       <div className="barra">
         <label>
+          Período de carga
+          <select value={periodo} onChange={(e) => { setPeriodo(e.target.value); setPagina(0) }}>
+            <option value="">Todos</option>
+            {periodos.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <label>
           Buscar cédula
-          <input placeholder="Cédula…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 220 }} />
+          <input placeholder="Cédula…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 200 }} />
         </label>
         <div className="segmentos" role="group" aria-label="Estatus de llamada">
           {SEGMENTOS.map((s) => (
@@ -140,13 +161,21 @@ export default function Gestion() {
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
 
       <div className="leyenda-cola">
-        <span className="muestra devolver" /> Devolver llamada vigente (desde 5 minutos antes de la hora acordada)
-        <span className="muestra sospecha" /> Caso con sospecha
+        <span className="muestra devolver" /> Devolver llamada vigente (desde 10 minutos antes de la hora acordada)
       </div>
 
       <div className="tarjeta">
         <div className="tabla-envoltorio">
-          <table className="sin-clic">
+          <table className="sin-clic tabla-gestion">
+            <colgroup>
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '7%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>CLIENTE</th>
@@ -160,12 +189,9 @@ export default function Gestion() {
             </thead>
             <tbody>
               {filas.map((f) => (
-                <tr key={f.id} className={f.caso_sospecha === 'SI' ? 'fila-sospecha' : f.orden_estatus === 0 ? 'fila-devolver' : ''}>
-                  <td title={f.cliente}>
-                    {f.cliente}
-                    {f.caso_sospecha === 'SI' && <span className="chip mal" style={{ marginLeft: 8 }}>Sospecha</span>}
-                  </td>
-                  <td>{f.tipo_credito}</td>
+                <tr key={f.id} className={f.orden_estatus === 0 ? 'fila-devolver' : ''}>
+                  <td title={f.cliente}>{f.cliente}</td>
+                  <td title={f.tipo_credito ?? ''}>{f.tipo_credito}</td>
                   <td>{f.llave_credito}</td>
                   <td>{f.telefono}</td>
                   <td>{fmtFechaHora(f.fecha_formalizado, tz)}</td>

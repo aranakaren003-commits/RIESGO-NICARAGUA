@@ -11,8 +11,9 @@ const TAM = 50
 
 interface Props {
   titulo: string
-  columna: 'caso_sospecha' | 'estatus_llamada'
-  valor: string // 'SI' o 'NUMERO EQUIVOCADO'
+  tabla?: 'llamadas_bienvenida' | 'v_historial_numero_equivocado' // por defecto llamadas_bienvenida
+  columna?: 'caso_sospecha' | 'estatus_llamada'
+  valor?: string // 'SI' o 'NUMERO EQUIVOCADO'
   comentarioCampo: 'comentario_llamada' | 'numero_pertenece_a'
   comentarioLabel: string
   archivoBase: string
@@ -21,7 +22,7 @@ interface Props {
 
 // Vista de análisis: todos los registros del país (o países, en vista regional) que cumplen un criterio (sospecha o número equivocado),
 // sin importar la carga en la que llegaron. Reutilizada por «Casos sospechosos» y «Número equivocado».
-export default function ListaAnalisis({ titulo, columna, valor, comentarioCampo, comentarioLabel, archivoBase, permisos }: Props) {
+export default function ListaAnalisis({ titulo, tabla = 'llamadas_bienvenida', columna, valor, comentarioCampo, comentarioLabel, archivoBase, permisos }: Props) {
   const { pais } = usePais()
   const tz = pais.zona_horaria
   const puedeEditar = permisos.has(P.registrosEditar)
@@ -46,7 +47,8 @@ export default function ListaAnalisis({ titulo, columna, valor, comentarioCampo,
 
   const consulta = useCallback(
     <T extends { eq: (c: string, v: string) => T; or: (f: string) => T }>(q: T): T => {
-      let r = q.eq('id_pais', pais.id).eq(columna, valor)
+      let r = q.eq('id_pais', pais.id)
+      if (columna && valor) r = r.eq(columna, valor)
       const t = texto.trim().replace(/[,()%*]/g, ' ')
       if (t) {
         const partes = [`cliente.ilike.%${t}%`, `cedula.ilike.%${t}%`, `telefono.ilike.%${t}%`, `promotor.ilike.%${t}%`]
@@ -61,14 +63,14 @@ export default function ListaAnalisis({ titulo, columna, valor, comentarioCampo,
   const cargar = useCallback(async () => {
     setCargando(true)
     setError('')
-    const { data, count, error } = await consulta(sb.from('llamadas_bienvenida').select('*', { count: 'exact' }))
+    const { data, count, error } = await consulta(sb.from(tabla as 'llamadas_bienvenida').select('*', { count: 'exact' }))
       .order('fecha_formalizado', { ascending: false, nullsFirst: false })
       .range(pagina * TAM, pagina * TAM + TAM - 1)
     if (error) setError(error.message)
-    setFilas(data ?? [])
+    setFilas((data as Llamada[] | null) ?? [])
     setTotal(count ?? 0)
     setCargando(false)
-  }, [consulta, pagina])
+  }, [consulta, pagina, tabla])
 
   useEffect(() => {
     cargar()
@@ -78,14 +80,14 @@ export default function ListaAnalisis({ titulo, columna, valor, comentarioCampo,
     setExportando(true)
     const acum: Llamada[] = []
     for (let d = 0; ; d += 1000) {
-      const { data, error } = await consulta(sb.from('llamadas_bienvenida').select('*'))
+      const { data, error } = await consulta(sb.from(tabla as 'llamadas_bienvenida').select('*'))
         .order('fecha_formalizado', { ascending: false, nullsFirst: false })
         .range(d, d + 999)
       if (error) {
         setError(error.message)
         break
       }
-      acum.push(...(data ?? []))
+      acum.push(...((data as Llamada[] | null) ?? []))
       if (!data || data.length < 1000) break
     }
     const cab = ['CLIENTE', 'NUMERO DE SOLICITUD', 'CEDULA', 'TELEFONO', 'TIPO DE CRÉDITO', 'PROMOTOR', 'SUCURSAL', 'ORIGEN', 'FECHA DE FORMALIZADO', 'ESTATUS DE LLAMADA', comentarioLabel]
@@ -134,7 +136,7 @@ export default function ListaAnalisis({ titulo, columna, valor, comentarioCampo,
             </thead>
             <tbody>
               {filas.map((r) => (
-                <tr key={r.id} className={columna === 'caso_sospecha' ? 'fila-sospecha' : ''} onClick={() => setEditando(r)}>
+                <tr key={r.id} className={r.caso_sospecha === 'SI' ? 'fila-sospecha' : ''} onClick={() => setEditando(r)}>
                   <td title={r.cliente}>{r.cliente}</td>
                   <td>{r.numero_solicitud}</td>
                   <td>{r.telefono}</td>

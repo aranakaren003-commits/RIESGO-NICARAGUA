@@ -6,9 +6,11 @@ import { PaisContext, guardarPaisRegional, leerPaisRegional } from './lib/pais'
 import type { Pais, PerfilUsuario, Rol } from './types/database.types'
 import Login from './components/Login'
 import Gestion from './components/Gestion'
+import GestionNumeroEquivocado from './components/GestionNumeroEquivocado'
 import Registros from './components/Registros'
 import Dashboard from './components/Graficas'
 import Importar from './components/Importar'
+import ImportarCit from './components/ImportarCit'
 import Intentos from './components/Intentos'
 import Administracion from './components/Administracion'
 import CambiarClave from './components/CambiarClave'
@@ -17,16 +19,31 @@ import CasosSospecha from './components/CasosSospecha'
 import NumeroEquivocado from './components/NumeroEquivocado'
 import VistaPrevia from './components/VistaPrevia'
 
-type Vista = 'gestion' | 'registros' | 'dashboard' | 'intentos' | 'importar' | 'sospecha' | 'numero_equivocado' | 'admin' | 'vista_previa'
+type Vista =
+  | 'gestion'
+  | 'gestion_numero_equivocado'
+  | 'registros'
+  | 'dashboard'
+  | 'intentos'
+  | 'importar'
+  | 'importar_cit'
+  | 'sospecha'
+  | 'numero_equivocado'
+  | 'admin'
+  | 'vista_previa'
 
+// Para el Digitador, «Número equivocado» gestiona lo pendiente (mismo permiso que Llamadas);
+// para Gerente local/regional/Analista/Admin es la pestaña histórica de análisis (permiso aparte).
 const VISTAS: { id: Vista; titulo: string; permiso: string }[] = [
   { id: 'gestion', titulo: 'Llamadas', permiso: P.gestionLlamadas },
+  { id: 'gestion_numero_equivocado', titulo: 'Número Equivocado', permiso: P.gestionLlamadas },
   { id: 'registros', titulo: 'Registros', permiso: P.registrosVer },
   { id: 'sospecha', titulo: 'Casos sospechosos', permiso: P.casosSospechaVer },
   { id: 'numero_equivocado', titulo: 'Número equivocado', permiso: P.casosNumeroEquivocadoVer },
   { id: 'dashboard', titulo: 'Dashboard', permiso: P.graficasVer },
-  { id: 'intentos', titulo: 'Bitácora de intentos', permiso: P.intentosVer },
+  { id: 'intentos', titulo: 'Bitácora de cambios de estatus', permiso: P.intentosVer },
   { id: 'importar', titulo: 'Importar bitácora', permiso: P.bitacoraImportar },
+  { id: 'importar_cit', titulo: 'Importar CIT', permiso: P.citImportar },
   { id: 'admin', titulo: 'Administración', permiso: P.adminUsuarios },
   { id: 'vista_previa', titulo: 'Vista de prueba', permiso: P.adminVistaPrevia },
 ]
@@ -182,12 +199,14 @@ export default function App() {
       <main className="contenedor">
         {/* key = país: al cambiar de país se reinician filtros y datos */}
         {actual.id === 'gestion' && <Gestion key={pais.id} />}
+        {actual.id === 'gestion_numero_equivocado' && <GestionNumeroEquivocado key={pais.id} />}
         {actual.id === 'registros' && <Registros key={pais.id} permisos={permisos} />}
         {actual.id === 'sospecha' && <CasosSospecha key={pais.id} permisos={permisos} />}
         {actual.id === 'numero_equivocado' && <NumeroEquivocado key={pais.id} permisos={permisos} />}
-        {actual.id === 'dashboard' && <Dashboard key={pais.id} permisos={permisos} />}
+        {actual.id === 'dashboard' && <Dashboard key={pais.id} permisos={permisos} esRegional={esRegional} paises={paises} pais={pais} />}
         {actual.id === 'intentos' && <Intentos key={pais.id} />}
         {actual.id === 'importar' && <Importar key={pais.id} />}
+        {actual.id === 'importar_cit' && <ImportarCit key={pais.id} />}
         {actual.id === 'admin' && <Administracion miId={sesion.user.id} miPerfil={perfil} permisos={permisos} onPaisesCambiaron={cargarPaises} />}
         {actual.id === 'vista_previa' && <VistaPrevia onActivar={activarVistaPrevia} />}
       </main>

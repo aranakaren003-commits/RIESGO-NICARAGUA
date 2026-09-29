@@ -75,8 +75,9 @@ export default function Importar() {
         <input type="file" accept=".csv,text/csv" onChange={elegir} />
       </div>
       <div className="aviso info" style={{ marginBottom: 12 }}>
-        Solo se importan los créditos con ESTADO: {ESTADOS_IMPORTABLES.map((e) => e.toLowerCase()).join(', ')}. El resto se omite. Los registros que ya existen en {pais.nombre} no se modifican
-        (se conservan las ediciones), pero quedan ligados a la nueva carga.
+        Solo se importan los créditos con ESTADO: {ESTADOS_IMPORTABLES.map((e) => e.toLowerCase()).join(', ')}. El resto se omite. Si dos filas del mismo período comparten cédula, solo se importa
+        la primera (se considera duplicidad de cliente). Un crédito con ESTADO «Aprobado Informa» se marca automáticamente como «Aprobado sin formalizar» y no entra a la cola de llamadas. Los
+        registros que ya existen en {pais.nombre} no se modifican (se conservan las ediciones), pero quedan ligados a la nueva carga.
       </div>
 
       {lectura && (

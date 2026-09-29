@@ -192,16 +192,16 @@ fieldset.sin-borde { border: 0; margin: 0; padding: 0; min-width: 0; }
 .estatus-select.con-estatus { color: var(--azul); background: #e3e9f2; }
 .btn.mini { padding: 4px 8px; font-size: 12px; }
 
-/* Resaltados de la cola y las tablas: sospecha (rojo tenue) y devolver llamada vigente (amarillo) */
+/* Resaltados de la cola y las tablas: sospecha (rojo tenue) y devolver llamada vigente (azul institucional) */
 tbody tr.fila-sospecha td { background: #fde3e5; }
 tbody tr.fila-sospecha:hover td { background: #fbd0d4; }
-tbody tr.fila-devolver td { background: #fff3a8; }
-tbody tr.fila-devolver:hover td { background: #ffec7a; }
+tbody tr.fila-devolver td { background: #e3e9f2; }
+tbody tr.fila-devolver:hover td { background: #cddbef; }
 .devolver-hora { font-size: 12px; font-weight: 700; color: var(--azul); white-space: nowrap; }
-.devolver-hora.ya { background: #ffe066; padding: 2px 8px; border-radius: 999px; }
+.devolver-hora.ya { background: var(--azul-claro); color: #fff; padding: 2px 8px; border-radius: 999px; }
 .leyenda-cola { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--azul-claro); }
 .leyenda-cola .muestra { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--gris-borde); margin-right: -10px; }
-.leyenda-cola .muestra.devolver { background: #fff3a8; }
+.leyenda-cola .muestra.devolver { background: #e3e9f2; }
 .leyenda-cola .muestra.sospecha { background: #fde3e5; }
 .segmentos { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--gris-borde); border-radius: 8px; overflow: hidden; background: #fff; align-self: end; }
 .segmentos button { background: none; border: 0; border-right: 1px solid var(--gris-borde); padding: 9px 14px; font-weight: 700; color: var(--azul-claro); cursor: pointer; }
@@ -220,6 +220,12 @@ button.barra-fila.clicable { width: 100%; background: none; border: 0; padding: 
 button.barra-fila.clicable:hover { background: #eef1f4; }
 button.barra-fila.elegida { background: var(--verde-claro); outline: 2px solid var(--verde); }
 button.barra-fila.atenuada { opacity: 0.55; }
+.chip-pais { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--azul); font-size: 13px; padding: 8px 4px; }
+.pastel-envoltorio { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+.pastel { width: 96px; height: 96px; border-radius: 50%; flex-shrink: 0; }
+.pastel-leyenda { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.pastel-leyenda span { display: flex; align-items: center; gap: 6px; }
+.pastel-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 
 /* Selección de país */
 .paises-rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }

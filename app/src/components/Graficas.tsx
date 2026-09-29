@@ -1,21 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import { origenLlamadas } from '../lib/consultas'
-import { ALL_FIELDS, type FieldKey } from '../lib/fields'
-import { fmtFechaHora } from '../lib/fechas'
-import { usePais } from '../lib/pais'
+import { sb } from '../lib/supabase'
+import { ALL_FIELDS, QUEJA_CATEGORIAS, type FieldKey } from '../lib/fields'
+import { fmtFechaHora, hoyEn } from '../lib/fechas'
 import { P, type Permisos } from '../lib/permisos'
-import type { VLlamadaCarga } from '../types/database.types'
-import { useFiltroCarga } from './FiltroCarga'
+import type { Llamada, Pais, ResumenEstatusPeriodo } from '../types/database.types'
+import Bandera from './Bandera'
 
-type Fila = VLlamadaCarga
+type Fila = Llamada
 type Filtros = Partial<Record<FieldKey, string>>
 
-const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
-  { key: 'estatus_llamada' },
-  { key: 'caso_sospecha' },
-  { key: 'tipo_credito' },
-  { key: 'promotor', top: 10 },
+// Preguntas de la encuesta (nivel local/cargador: detalle)
+const CAMPOS_ENCUESTA: { key: FieldKey; top?: number }[] = [
   { key: 'atencion_tramite' },
   { key: 'atencion_ejecutivo' },
   { key: 'calificacion_gestion' },
@@ -29,14 +26,20 @@ const CAMPOS_GRAFICA: { key: FieldKey; top?: number }[] = [
   { key: 'claro_informacion' },
   { key: 'conforme_fechas_pago' },
   { key: 'medio_notificacion' },
-  { key: 'sucursal', top: 10 },
-  { key: 'origen', top: 10 },
 ]
 
-// Filtros «por lista» (además de hacer clic en las barras)
-const LISTAS: FieldKey[] = ['tipo_credito', 'estatus_llamada', 'sucursal']
-
 const etiqueta = (key: FieldKey) => ALL_FIELDS.find((f) => f.key === key)?.caption ?? ALL_FIELDS.find((f) => f.key === key)?.label ?? key
+
+function periodosRecientes(tz: string, cuantos = 12): string[] {
+  const hoy = hoyEn(tz)
+  const [anio, mes] = hoy.split('-').map(Number)
+  const out: string[] = []
+  for (let i = 0; i < cuantos; i++) {
+    const d = new Date(Date.UTC(anio, mes - 1 - i, 1))
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+  return out
+}
 
 function pasa(r: Fila, filtros: Filtros, salvo?: FieldKey): boolean {
   for (const [k, v] of Object.entries(filtros) as [FieldKey, string][]) {
@@ -58,31 +61,74 @@ function contar(filas: Fila[], key: FieldKey, top?: number) {
   return top ? orden.slice(0, top) : orden
 }
 
-// Dashboard dinámico: cada gráfica es a la vez un filtro de las demás (segmentación cruzada).
-export default function Dashboard({ permisos }: { permisos: Permisos }) {
-  const { pais } = usePais()
+const COLORES_PASTEL = ['#4c9c2e', '#002554', '#ee212e', '#677c98', '#f2c200', '#8e44ad', '#16a085', '#d35400', '#7f8c8d', '#2980b9']
+
+function Pastel({ datos }: { datos: [string, number][] }) {
+  const total = datos.reduce((s, [, n]) => s + n, 0)
+  if (total === 0) return null
+  let acumulado = 0
+  const segmentos = datos.map(([, n], i) => {
+    const desde = (acumulado / total) * 360
+    acumulado += n
+    const hasta = (acumulado / total) * 360
+    return `${COLORES_PASTEL[i % COLORES_PASTEL.length]} ${desde}deg ${hasta}deg`
+  })
+  return (
+    <div className="pastel-envoltorio">
+      <div className="pastel" style={{ background: `conic-gradient(${segmentos.join(', ')})` }} />
+      <div className="pastel-leyenda">
+        {datos.map(([nombre, n], i) => (
+          <span key={nombre}>
+            <i style={{ background: COLORES_PASTEL[i % COLORES_PASTEL.length] }} />
+            {nombre} · {n} ({Math.round((n / total) * 100)}%)
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function contarGestiones(idsLlamada: string[]): Promise<Map<string, number>> {
+  const mapa = new Map<string, number>()
+  for (let i = 0; i < idsLlamada.length; i += 300) {
+    const trozo = idsLlamada.slice(i, i + 300)
+    const { data } = await sb.from('intentos_llamada').select('id_llamada').in('id_llamada', trozo)
+    for (const fila of data ?? []) mapa.set(fila.id_llamada, (mapa.get(fila.id_llamada) ?? 0) + 1)
+  }
+  return mapa
+}
+
+interface Props {
+  permisos: Permisos
+  esRegional: boolean
+  paises: Pais[]
+  pais: Pais
+}
+
+// Dashboard dinámico: cada gráfica es a la vez un filtro de las demás (segmentación cruzada). Nivel «regional» = macro;
+// nivel «local»/«cargador» = igual que regional más detalle (encuesta, promotor vs sospecha).
+export default function Dashboard({ permisos, esRegional, pais }: Props) {
   const tz = pais.zona_horaria
   const puedeDescargar = permisos.has(P.dashboardDescargar)
-  const { carga, todas, cargando: cargandoCargas, controles } = useFiltroCarga(pais.id, tz, true)
+  const periodos = useMemo(() => periodosRecientes(tz), [tz])
+  const [periodo, setPeriodo] = useState(periodos[0])
   const [filas, setFilas] = useState<Fila[]>([])
+  const [gestiones, setGestiones] = useState<Map<string, number>>(new Map())
+  const [resumenPeriodo, setResumenPeriodo] = useState<ResumenEstatusPeriodo | null>(null)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [filtros, setFiltros] = useState<Filtros>({})
-  const cargaId = carga?.id
 
   useEffect(() => {
-    if (!cargaId && !todas) {
-      setFilas([])
-      return
-    }
     let activo = true
     ;(async () => {
       setCargando(true)
       setError('')
       const acum: Fila[] = []
       for (let desde = 0; ; desde += 1000) {
-        const base = origenLlamadas(todas).select('*')
-        const { data, error } = await (cargaId ? base.eq('id_carga', cargaId) : base.eq('id_pais', pais.id)).order('num', { ascending: true }).range(desde, desde + 999)
+        let q = origenLlamadas(true).select('*').eq('id_pais', pais.id)
+        if (periodo) q = q.eq('periodo', periodo)
+        const { data, error } = await q.range(desde, desde + 999)
         if (error) {
           if (activo) setError(error.message)
           break
@@ -90,19 +136,27 @@ export default function Dashboard({ permisos }: { permisos: Permisos }) {
         acum.push(...(data ?? []))
         if (!data || data.length < 1000) break
       }
-      if (activo) {
-        setFilas(acum)
-        setFiltros({})
-        setCargando(false)
+      if (!activo) return
+      setFilas(acum)
+      setFiltros({})
+      const mapa = await contarGestiones(acum.map((r) => r.id))
+      if (activo) setGestiones(mapa)
+
+      if (periodo) {
+        const { data } = await sb.rpc('resumen_estatus_periodo', { p_pais: pais.id, p_periodo: periodo })
+        if (activo) setResumenPeriodo((data as unknown as ResumenEstatusPeriodo[] | null)?.[0] ?? null)
+      } else {
+        setResumenPeriodo(null)
       }
+      setCargando(false)
     })()
     return () => {
       activo = false
     }
-  }, [cargaId, todas, pais.id])
+  }, [pais.id, periodo])
 
   const filtradas = useMemo(() => filas.filter((r) => pasa(r, filtros)), [filas, filtros])
-  const conEstatus = filtradas.filter((r) => r.estatus_llamada).length
+  const validas = useMemo(() => filtradas.filter((r) => r.estatus_llamada !== 'APROBADO SIN FORMALIZAR'), [filtradas])
   const activos = Object.entries(filtros) as [FieldKey, string][]
 
   const alternar = (key: FieldKey, valor: string) =>
@@ -120,33 +174,71 @@ export default function Dashboard({ permisos }: { permisos: Permisos }) {
       return n
     })
 
+  // KPIs
+  const aceptacion = validas.filter((r) => r.estatus_llamada === 'ACEPTACION').length
+  const noAceptacion = validas.filter((r) => r.estatus_llamada === 'NO ACEPTACION').length
+  const totalGestiones = validas.reduce((s, r) => s + (gestiones.get(r.id) ?? 0), 0)
+  const gestionesAceptacion = validas.filter((r) => r.estatus_llamada === 'ACEPTACION')
+  const promedioGestionesAceptacion = gestionesAceptacion.length
+    ? gestionesAceptacion.reduce((s, r) => s + (gestiones.get(r.id) ?? 0), 0) / gestionesAceptacion.length
+    : 0
+  const tasaContacto = validas.length ? ((aceptacion + noAceptacion) / validas.length) * 100 : 0
+  const efectividadBase = validas.length ? (aceptacion / validas.length) * 100 : 0
+  const sospechososMes = filtradas.filter((r) => r.caso_sospecha === 'SI').length
+
   function descargar() {
     const filasCsv = filtradas.map((r) => ALL_FIELDS.map((f) => (f.type === 'datetime' ? fmtFechaHora(r[f.key] as string | null, tz) : (r[f.key] ?? ''))))
     const csv = Papa.unparse({ fields: ALL_FIELDS.map((f) => f.label), data: filasCsv }, { delimiter: ';' })
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `dashboard_${pais.codigo}_${carga ? `${carga.periodo}_carga${carga.numero}` : 'todas'}.csv`
+    a.download = `dashboard_${pais.codigo}_${periodo || 'todos'}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
 
+  const datosQueja = contar(filtradas, 'queja')
+  const categoriaDeOpcion = (opcion: string) => QUEJA_CATEGORIAS.find((c) => c.opciones.includes(opcion))?.categoria ?? 'Otra'
+  const datosQuejaCategoria = (() => {
+    const m = new Map<string, number>()
+    for (const [op, n] of datosQueja) m.set(categoriaDeOpcion(op), (m.get(categoriaDeOpcion(op)) ?? 0) + n)
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  })()
+  const datosPromotorSospecha = contar(
+    filtradas.filter((r) => r.caso_sospecha === 'SI'),
+    'promotor',
+    10,
+  )
+
   return (
     <>
       <div className="barra">
-        {controles}
-        {LISTAS.map((key) => {
-          const opciones = contar(filas.filter((r) => pasa(r, filtros, key)), key)
-          return (
-            <label key={key}>
-              {ALL_FIELDS.find((f) => f.key === key)?.label}
-              <select value={filtros[key] ?? ''} onChange={(e) => fijar(key, e.target.value)}>
-                <option value="">Todos</option>
-                {opciones.map(([v, n]) => <option key={v} value={v}>{v} ({n})</option>)}
-              </select>
-            </label>
-          )
-        })}
+        <label>
+          Período
+          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+            <option value="">Todos (en vivo)</option>
+            {periodos.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <label>
+          Tipo de crédito
+          <select value={filtros.tipo_credito ?? ''} onChange={(e) => fijar('tipo_credito', e.target.value)}>
+            <option value="">Todos</option>
+            {contar(filas.filter((r) => pasa(r, filtros, 'tipo_credito')), 'tipo_credito').map(([v, n]) => <option key={v} value={v}>{v} ({n})</option>)}
+          </select>
+        </label>
+        <label>
+          Estatus de llamada
+          <select value={filtros.estatus_llamada ?? ''} onChange={(e) => fijar('estatus_llamada', e.target.value)}>
+            <option value="">Todos</option>
+            {contar(filas.filter((r) => pasa(r, filtros, 'estatus_llamada')), 'estatus_llamada').map(([v, n]) => <option key={v} value={v}>{v} ({n})</option>)}
+          </select>
+        </label>
+        {esRegional && (
+          <span className="chip-pais" title="Para cambiar de país usa las pestañas de arriba">
+            <Bandera codigo={pais.codigo} alto={16} /> {pais.nombre}
+          </span>
+        )}
         <div className="espacio" />
         {puedeDescargar && <button className="btn secundario" onClick={descargar} disabled={filtradas.length === 0}>Descargar CSV</button>}
       </div>
@@ -164,47 +256,111 @@ export default function Dashboard({ permisos }: { permisos: Permisos }) {
       )}
 
       {error && <div className="aviso error" style={{ marginBottom: 12 }}>{error}</div>}
-      {cargando || cargandoCargas ? (
+      {cargando ? (
         <div className="vacio">Cargando…</div>
       ) : filas.length === 0 ? (
         <div className="vacio">No hay registros en la selección de {pais.nombre}.</div>
       ) : (
         <>
           <div className="kpis">
-            <div className="tarjeta kpi"><div className="valor">{filtradas.length.toLocaleString('es-NI')}</div><div className="titulo">Registros{activos.length ? ` (de ${filas.length.toLocaleString('es-NI')})` : ''}</div></div>
-            <div className="tarjeta kpi"><div className="valor">{conEstatus.toLocaleString('es-NI')}</div><div className="titulo">Con ESTATUS DE LLAMADA</div></div>
-            <div className="tarjeta kpi"><div className="valor">{(filtradas.length - conEstatus).toLocaleString('es-NI')}</div><div className="titulo">Sin ESTATUS DE LLAMADA</div></div>
+            <div className="tarjeta kpi"><div className="valor">{validas.length.toLocaleString('es-NI')}</div><div className="titulo">Llamadas (base válida)</div></div>
+            <div className="tarjeta kpi"><div className="valor">{totalGestiones.toLocaleString('es-NI')}</div><div className="titulo">Gestiones (intentos)</div></div>
+            <div className="tarjeta kpi"><div className="valor">{tasaContacto.toFixed(1)}%</div><div className="titulo">Tasa de contacto</div></div>
+            <div className="tarjeta kpi"><div className="valor">{efectividadBase.toFixed(1)}%</div><div className="titulo">Efectividad de la base</div></div>
+            <div className="tarjeta kpi"><div className="valor">{promedioGestionesAceptacion.toFixed(1)}</div><div className="titulo">Gestiones promedio para aceptación</div></div>
+            <div className="tarjeta kpi"><div className="valor">{sospechososMes.toLocaleString('es-NI')}</div><div className="titulo">Casos sospechosos {periodo ? `(${periodo})` : ''}</div></div>
           </div>
+
+          {resumenPeriodo && (
+            <section className="tarjeta grafica" style={{ marginBottom: 14 }}>
+              <h3>% de estatus de llamada</h3>
+              <div className="sub">Congelado al cierre del día 4 del mes siguiente ({periodo}) · base: {resumenPeriodo.total_base.toLocaleString('es-NI')} registros válidos</div>
+              {(
+                [
+                  ['Aceptación', resumenPeriodo.aceptacion],
+                  ['No aceptación', resumenPeriodo.no_aceptacion],
+                  ['Buzón', resumenPeriodo.buzon],
+                  ['No contesta', resumenPeriodo.no_contesta],
+                  ['Devolver llamada', resumenPeriodo.devolver_llamada],
+                  ['Número equivocado', resumenPeriodo.numero_equivocado],
+                  ['Sin estatus', resumenPeriodo.sin_estatus],
+                ] as [string, number][]
+              ).map(([nombre, n]) => (
+                <div key={nombre} className="barra-fila">
+                  <span className="nombre">{nombre}</span>
+                  <span className="pista"><span className="relleno" style={{ width: `${resumenPeriodo.total_base ? (n / resumenPeriodo.total_base) * 100 : 0}%`, display: 'block' }} /></span>
+                  <span className="num">{n} · {resumenPeriodo.total_base ? Math.round((n / resumenPeriodo.total_base) * 100) : 0}%</span>
+                </div>
+              ))}
+            </section>
+          )}
+
           <div className="graficas">
-            {CAMPOS_GRAFICA.map(({ key, top }) => {
-              const datos = contar(filas.filter((r) => pasa(r, filtros, key)), key, top)
-              const total = datos.reduce((s, [, n]) => s + n, 0)
-              const max = datos[0]?.[1] ?? 1
-              const def = ALL_FIELDS.find((f) => f.key === key)!
-              return (
-                <section key={key} className="tarjeta grafica">
-                  <h3>{def.caption ?? def.label}</h3>
-                  <div className="sub">{def.label}{top ? ` · top ${top}` : ''} · {total.toLocaleString('es-NI')} respuestas · clic en una barra para filtrar</div>
-                  {datos.length === 0 && <div className="sub">Sin datos para esta selección.</div>}
-                  {datos.map(([nombre, n]) => {
-                    const elegido = filtros[key] === nombre
-                    return (
-                      <button
-                        key={nombre}
-                        className={`barra-fila clicable${elegido ? ' elegida' : ''}${filtros[key] && !elegido ? ' atenuada' : ''}`}
-                        onClick={() => alternar(key, nombre)}
-                        aria-pressed={elegido}
-                        title={`Filtrar por ${etiqueta(key)}: ${nombre}`}
-                      >
-                        <span className="nombre">{nombre}</span>
-                        <span className="pista"><span className="relleno" style={{ width: `${(n / max) * 100}%`, display: 'block' }} /></span>
-                        <span className="num">{n} · {Math.round((n / total) * 100)}%</span>
-                      </button>
-                    )
-                  })}
-                </section>
-              )
-            })}
+            <section className="tarjeta grafica">
+              <h3>Categorización de la queja</h3>
+              <div className="sub">{datosQueja.reduce((s, [, n]) => s + n, 0).toLocaleString('es-NI')} respuestas</div>
+              {datosQuejaCategoria.length === 0 && <div className="sub">Sin datos para esta selección.</div>}
+              {datosQuejaCategoria.map(([nombre, n]) => {
+                const max = datosQuejaCategoria[0]?.[1] ?? 1
+                return (
+                  <div key={nombre} className="barra-fila">
+                    <span className="nombre">{nombre}</span>
+                    <span className="pista"><span className="relleno" style={{ width: `${(n / max) * 100}%`, display: 'block' }} /></span>
+                    <span className="num">{n}</span>
+                  </div>
+                )
+              })}
+              <Pastel datos={datosQuejaCategoria} />
+            </section>
+
+            {!esRegional && (
+              <section className="tarjeta grafica">
+                <h3>Promotor vs casos con sospecha</h3>
+                <div className="sub">Top 10 promotores por casos marcados con sospecha</div>
+                {datosPromotorSospecha.length === 0 && <div className="sub">Sin casos con sospecha en esta selección.</div>}
+                {datosPromotorSospecha.map(([nombre, n]) => {
+                  const max = datosPromotorSospecha[0]?.[1] ?? 1
+                  return (
+                    <div key={nombre} className="barra-fila">
+                      <span className="nombre" title={nombre}>{nombre}</span>
+                      <span className="pista"><span className="relleno" style={{ width: `${(n / max) * 100}%`, display: 'block' }} /></span>
+                      <span className="num">{n}</span>
+                    </div>
+                  )
+                })}
+              </section>
+            )}
+
+            {!esRegional &&
+              CAMPOS_ENCUESTA.map(({ key, top }) => {
+                const datos = contar(filas.filter((r) => pasa(r, filtros, key)), key, top)
+                const total = datos.reduce((s, [, n]) => s + n, 0)
+                const max = datos[0]?.[1] ?? 1
+                const def = ALL_FIELDS.find((f) => f.key === key)!
+                return (
+                  <section key={key} className="tarjeta grafica">
+                    <h3>{def.caption ?? def.label}</h3>
+                    <div className="sub">{def.label}{top ? ` · top ${top}` : ''} · {total.toLocaleString('es-NI')} respuestas · clic en una barra para filtrar</div>
+                    {datos.length === 0 && <div className="sub">Sin datos para esta selección.</div>}
+                    {datos.map(([nombre, n]) => {
+                      const elegido = filtros[key] === nombre
+                      return (
+                        <button
+                          key={nombre}
+                          className={`barra-fila clicable${elegido ? ' elegida' : ''}${filtros[key] && !elegido ? ' atenuada' : ''}`}
+                          onClick={() => alternar(key, nombre)}
+                          aria-pressed={elegido}
+                          title={`Filtrar por ${etiqueta(key)}: ${nombre}`}
+                        >
+                          <span className="nombre">{nombre}</span>
+                          <span className="pista"><span className="relleno" style={{ width: `${(n / max) * 100}%`, display: 'block' }} /></span>
+                          <span className="num">{n} · {Math.round((n / total) * 100)}%</span>
+                        </button>
+                      )
+                    })}
+                  </section>
+                )
+              })}
           </div>
         </>
       )}

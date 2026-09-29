@@ -15,11 +15,13 @@ export type Llamada = {
   fecha_formalizado: string | null
   estatus_llamada: string | null
   comentario_llamada: string | null
-  fecha_hora_llamada: string | null
+  fecha_hora_primera_gestion: string | null
+  fecha_hora_ultima_gestion: string | null
   devolver_llamada_en: string | null
   caso_sospecha: string | null
   adquirio_asistencia: string | null
   numero_pertenece_a: string | null
+  numero_equivocado_gestionado: boolean
   queja: string | null
   tipo_credito: string | null
   promotor: string | null
@@ -87,13 +89,13 @@ export type CampoConfig = { id_pais: string; campo: string; obligatorio: boolean
 export type VCola = {
   id: string
   id_pais: string
+  periodo: string
   cliente: string
   tipo_credito: string | null
   telefono: string | null
   cedula: string | null
   fecha_formalizado: string | null
   estatus_llamada: string | null
-  caso_sospecha: string | null
   devolver_llamada_en: string | null
   llave_credito: string | null
   intentos: number
@@ -137,6 +139,30 @@ export type CargaBitacora = {
 
 export type CargaRegistro = { id_carga: string; id_llamada: string }
 
+export type CargaCit = {
+  id: string
+  id_pais: string
+  periodo: string
+  numero: number
+  fecha_local: string
+  fecha_carga: string
+  nombre_archivo: string | null
+  total_filas: number
+  actualizados: number
+  cargado_por: string | null
+}
+
+export type ResumenEstatusPeriodo = {
+  total_base: number
+  aceptacion: number
+  no_aceptacion: number
+  buzon: number
+  no_contesta: number
+  devolver_llamada: number
+  numero_equivocado: number
+  sin_estatus: number
+}
+
 export type IntentoLlamada = {
   id: string
   id_llamada: string
@@ -148,6 +174,8 @@ export type IntentoLlamada = {
 }
 
 export type VLlamadaCarga = Llamada & { id_carga: string }
+
+export type VHistorialNumeroEquivocado = Llamada & { primera_vez: string; veces: number }
 
 export type VIntento = {
   id: string
@@ -230,19 +258,30 @@ export type Database = {
         Update: Partial<RolPermiso>
         Relationships: []
       }
+      cargas_cit: {
+        Row: CargaCit
+        Insert: Partial<CargaCit> & Pick<CargaCit, 'id_pais' | 'periodo' | 'numero' | 'fecha_local'>
+        Update: Partial<CargaCit>
+        Relationships: []
+      }
     }
     Views: {
       v_llamadas_carga: { Row: VLlamadaCarga; Relationships: [] }
       v_intentos_llamada: { Row: VIntento; Relationships: [] }
       v_cola_llamadas: { Row: VCola; Relationships: [] }
+      v_historial_numero_equivocado: { Row: VHistorialNumeroEquivocado; Relationships: [] }
     }
     Functions: {
       clave_cambiada: { Args: never; Returns: undefined }
       registrar_intento: { Args: { p_id: string; p_resultado: string }; Returns: Json }
+      marcar_numero_equivocado_gestionado: { Args: { p_id: string }; Returns: Json }
       revertir_perfil: { Args: { p_user: string }; Returns: undefined }
       actualizar_intento: { Args: { p_id: string; p_estatus: string }; Returns: undefined }
       crear_carga: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }
       importar_lote: { Args: { p_carga: string; p_filas: Json }; Returns: number }
+      crear_carga_cit: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }
+      importar_cit_lote: { Args: { p_carga: string; p_filas: Json }; Returns: number }
+      resumen_estatus_periodo: { Args: { p_pais: string; p_periodo: string }; Returns: ResumenEstatusPeriodo[] }
       usuario_activo: { Args: never; Returns: boolean }
       usuario_es_admin: { Args: never; Returns: boolean }
       tiene_permiso: { Args: { p_codigo: string }; Returns: boolean }

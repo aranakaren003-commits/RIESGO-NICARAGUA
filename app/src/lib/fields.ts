@@ -10,6 +10,7 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
+  groupedOptions?: { categoria: string; opciones: string[] }[] // para selects de dos niveles (p. ej. Queja)
   source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora; manual = lo ingresa el usuario
   readOnly?: boolean // nunca editable
   fijoEnEdicion?: boolean // editable solo al crear un registro nuevo; fijo al editar uno ya existente (viene de la bitácora)
@@ -31,8 +32,26 @@ export function esProducto(tipoCredito: string | null | undefined, tipo: TipoPro
 }
 
 const BMR = ['BUENO', 'REGULAR', 'MALO']
-// Pendiente: el administrador debe dar la lista definitiva de opciones de queja.
-const QUEJA_OPCIONES: string[] = []
+
+export const QUEJA_CATEGORIAS: { categoria: string; opciones: string[] }[] = [
+  { categoria: 'Cobro', opciones: ['Recordatorios consecutivos de Cobro', 'Llamadas consecutivas de Cobro', 'Mensaje consecutivos de Cobro', 'Otra'] },
+  {
+    categoria: 'Comercial',
+    opciones: [
+      'Atención muy lenta en sucursal',
+      'No le comentaron el seguro',
+      'Tiempo de Formalización',
+      'Llamadas por parte de diversos ejecutivos',
+      'No le entregaron Tarjeta de Pago',
+      'Otra',
+    ],
+  },
+  {
+    categoria: 'Condiciones de Crédito',
+    opciones: ['Monto del crédito', 'Tiempo de Legalización (Motos)', 'Tasa de Interes', 'Comisión de Desembolso', 'Otra'],
+  },
+  { categoria: 'DAC', opciones: ['Motorizado Descortés', 'Analista Descortés', 'Otra'] },
+]
 
 const f = (
   key: FieldKey,
@@ -50,6 +69,7 @@ export const ESTATUS_LLAMADA = [
   'BUZON',
   'DEVOLVER LLAMADA',
   'NUMERO EQUIVOCADO',
+  'APROBADO SIN FORMALIZAR',
   'NO FORMALIZA',
   'DUPLICADO',
   'ANULADO',
@@ -75,12 +95,14 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: 'Seguimiento de la llamada',
     fields: [
       f('estatus_llamada', 'J', 'ESTATUS DE LLAMADA', 'select', 'manual', { options: ESTATUS_LLAMADA }),
-      // Se fija sola la primera vez que se abre el registro (hora del país) y no se puede modificar
-      f('fecha_hora_llamada', 'K', 'FECHA Y HORA', 'datetime', 'manual', { readOnly: true }),
-      // La llamada se devolverá en esta fecha y hora: la línea sube en la cola desde 5 minutos antes
+      // Se fija sola la primera vez que se gestiona el registro (hora del país) y no se puede modificar
+      f('fecha_hora_primera_gestion', 'K', 'FECHA Y HORA PRIMERA GESTIÓN', 'datetime', 'manual', { readOnly: true }),
+      // Se actualiza sola cada vez que se registra o se cambia el estatus de la llamada
+      f('fecha_hora_ultima_gestion', '', 'FECHA Y HORA ÚLTIMA GESTIÓN', 'datetime', 'manual', { readOnly: true }),
+      // La llamada se devolverá en esta fecha y hora: la línea sube en la cola desde 10 minutos antes
       f('devolver_llamada_en', '', 'FECHA Y HORA PARA DEVOLVER LA LLAMADA', 'datetime', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'DEVOLVER LLAMADA' } }),
-      // A quién pertenece el número, cuando el estatus es NUMERO EQUIVOCADO
-      f('numero_pertenece_a', '', 'A QUIÉN PERTENECE EL NÚMERO', 'text', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'NUMERO EQUIVOCADO' } }),
+      // Comentario cuando el estatus es NUMERO EQUIVOCADO
+      f('numero_pertenece_a', '', 'COMENTARIO', 'text', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'NUMERO EQUIVOCADO' } }),
     ],
   },
   {
@@ -148,8 +170,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
       f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
       // Si es SI, la línea se resalta en rojo tenue en las tablas y queda disponible para análisis por promotor, canal y solicitud
       f('caso_sospecha', '', 'CASO TIENE SOSPECHA', 'sino', 'manual'),
-      // TODO: opciones pendientes de definir por el administrador (pidió dar la lista después)
-      f('queja', '', 'QUEJA', 'select', 'manual', { options: QUEJA_OPCIONES }),
+      f('queja', '', 'QUEJA', 'select', 'manual', { groupedOptions: QUEJA_CATEGORIAS }),
     ],
   },
 ]
@@ -158,7 +179,16 @@ export const ALL_FIELDS: FieldDef[] = FIELD_GROUPS.flatMap((g) => g.fields)
 export const MANUAL_FIELDS = ALL_FIELDS.filter((x) => x.source === 'manual')
 
 export function encuestaProgreso(r: Llamada): { llenos: number; total: number } {
-  const excluidos: FieldKey[] = ['estatus_llamada', 'comentario_llamada', 'fecha_hora_llamada', 'devolver_llamada_en', 'caso_sospecha', 'numero_pertenece_a', 'queja']
+  const excluidos: FieldKey[] = [
+    'estatus_llamada',
+    'comentario_llamada',
+    'fecha_hora_primera_gestion',
+    'fecha_hora_ultima_gestion',
+    'devolver_llamada_en',
+    'caso_sospecha',
+    'numero_pertenece_a',
+    'queja',
+  ]
   const campos = MANUAL_FIELDS.filter((x) => !excluidos.includes(x.key))
   const llenos = campos.filter((x) => {
     const v = r[x.key]

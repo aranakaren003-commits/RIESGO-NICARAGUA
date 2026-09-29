@@ -1,14 +1,14 @@
 import ListaAnalisis from './ListaAnalisis'
 import type { Permisos } from '../lib/permisos'
 
+// Histórico: casos que en algún momento pasaron por número equivocado, aunque su estatus haya cambiado después.
 export default function NumeroEquivocado({ permisos }: { permisos: Permisos }) {
   return (
     <ListaAnalisis
       titulo="Número equivocado"
-      columna="estatus_llamada"
-      valor="NUMERO EQUIVOCADO"
+      tabla="v_historial_numero_equivocado"
       comentarioCampo="numero_pertenece_a"
-      comentarioLabel="A QUIÉN PERTENECE EL NÚMERO"
+      comentarioLabel="COMENTARIO"
       archivoBase="numero_equivocado"
       permisos={permisos}
     />

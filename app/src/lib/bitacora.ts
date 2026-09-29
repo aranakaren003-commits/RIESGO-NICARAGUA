@@ -19,16 +19,20 @@ export interface FilaImportar {
   email: string | null // Correo_MK
   sucursal: string | null // Suc Origen
   origen: string | null // Medio Captacion
+  ord: number // orden dentro del archivo, para deduplicar por cédula de forma determinista
 }
 
 // Solo se importan los créditos en estos ESTADOS de la bitácora (comparación sin acentos ni mayúsculas).
 export const ESTADOS_IMPORTABLES = [
-  'FORMALIZADO',
   'AUDITADO',
-  'EXPEDIENTE COMPLETO',
+  'FORMALIZADO',
+  'REVISADO',
+  'EXPEDIENTE DIGITALIZADO',
   'EXPEDIENTE INCOMPLETO',
   'EXPEDIENTE CORREGIDO ASESOR',
+  'EXPEDIENTE COMPLETO',
   'EXPEDIENTE INSCRIPCION PRENDARIA',
+  'APROBADO INFORMA',
 ]
 
 const normaliza = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
@@ -104,6 +108,7 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
       email: limpia(r['Correo_MK']),
       sucursal: limpia(r['Suc Origen']),
       origen: limpia(r['Medio Captacion']),
+      ord: res.elegibles.length,
     })
   }
   return res
