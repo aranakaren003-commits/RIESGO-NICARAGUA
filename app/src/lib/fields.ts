@@ -10,12 +10,14 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
-  groupedOptions?: { categoria: string; opciones: string[] }[] // para selects de dos niveles (p. ej. Queja)
+  opcionesSegun?: { campo: FieldKey; mapa: Record<string, string[]> } // lista que depende del valor de otro campo (p. ej. detalle de la queja)
   source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora; manual = lo ingresa el usuario
   readOnly?: boolean // nunca editable
   fijoEnEdicion?: boolean // editable solo al crear un registro nuevo; fijo al editar uno ya existente (viene de la bitácora)
-  visibleSi?: { campo: FieldKey; valor: string } // el campo solo aparece (y es obligatorio) cuando otro campo tiene ese valor
+  visibleSi?: { campo: FieldKey; cumple: (valor: string) => boolean } // el campo solo aparece (y es obligatorio) cuando el valor de otro campo cumple la condición
 }
+
+const esIgualA = (esperado: string) => (v: string) => v === esperado
 
 export type TipoProducto = 'moto' | 'pyme'
 
@@ -24,6 +26,7 @@ export interface FieldGroup {
   fields: FieldDef[]
   aplicaA?: TipoProducto // la sección solo se activa para este tipo de producto
   obligatorioEn?: TipoProducto // los campos de la sección son obligatorios para este tipo de producto
+  obligatorioSiAceptacion?: boolean // las preguntas de la sección son obligatorias cuando el estatus de llamada es ACEPTACION
 }
 
 // TIPO DE CRÉDITO en la bitácora: 'MOTO', 'PYMES', 'ASALARIADO', etc.
@@ -52,6 +55,11 @@ export const QUEJA_CATEGORIAS: { categoria: string; opciones: string[] }[] = [
   },
   { categoria: 'DAC', opciones: ['Motorizado Descortés', 'Analista Descortés', 'Otra'] },
 ]
+
+// Con «Sin Queja» no se pide detalle
+export const SIN_QUEJA = 'Sin Queja'
+export const QUEJA_CATEGORIAS_OPCIONES = [SIN_QUEJA, ...QUEJA_CATEGORIAS.map((c) => c.categoria)]
+const QUEJA_DETALLE_POR_CATEGORIA = Object.fromEntries(QUEJA_CATEGORIAS.map((c) => [c.categoria, c.opciones]))
 
 const f = (
   key: FieldKey,
@@ -100,9 +108,9 @@ export const FIELD_GROUPS: FieldGroup[] = [
       // Se actualiza sola cada vez que se registra o se cambia el estatus de la llamada
       f('fecha_hora_ultima_gestion', '', 'FECHA Y HORA ÚLTIMA GESTIÓN', 'datetime', 'manual', { readOnly: true }),
       // La llamada se devolverá en esta fecha y hora: la línea sube en la cola desde 10 minutos antes
-      f('devolver_llamada_en', '', 'FECHA Y HORA PARA DEVOLVER LA LLAMADA', 'datetime', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'DEVOLVER LLAMADA' } }),
+      f('devolver_llamada_en', '', 'FECHA Y HORA PARA DEVOLVER LA LLAMADA', 'datetime', 'manual', { visibleSi: { campo: 'estatus_llamada', cumple: esIgualA('DEVOLVER LLAMADA') } }),
       // Comentario cuando el estatus es NUMERO EQUIVOCADO
-      f('numero_pertenece_a', '', 'COMENTARIO', 'text', 'manual', { visibleSi: { campo: 'estatus_llamada', valor: 'NUMERO EQUIVOCADO' } }),
+      f('numero_pertenece_a', '', 'COMENTARIO', 'text', 'manual', { visibleSi: { campo: 'estatus_llamada', cumple: esIgualA('NUMERO EQUIVOCADO') } }),
     ],
   },
   {
@@ -116,18 +124,20 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Atención y experiencia del trámite',
+    obligatorioSiAceptacion: true,
     fields: [
-      f('atencion_tramite', 'P', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÒN O EXPERIENCIA DEL TRAMITE DE CRÉDITO' }),
-      f('atencion_ejecutivo', 'Q', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÒN DEL EJECUTIVO O PROMOTOR DE CRÉDITO' }),
+      f('atencion_tramite', 'P', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÓN O EXPERIENCIA DEL TRAMITE DE CRÉDITO' }),
+      f('atencion_ejecutivo', 'Q', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÓN DEL EJECUTIVO O PROMOTOR DE CRÉDITO' }),
       f('nombre_ejecutivo', 'R', 'EJECUTIVO', 'text', 'manual', { caption: 'NOMBRE DEL EJECUTIVO QUE LE LLEVO LA GESTION.' }),
       f('calificacion_gestion', 'S', 'RÁPIDO , INTERMEDIO, MENOS RÁPIDO', 'select', 'manual', { options: ['RAPIDO', 'INTERMEDIO', 'MENOS RAPIDO'], caption: 'COMO CALIFICARÍA LA GESTIÓN' }),
       f('tipo_desembolso', 'T', 'SUCURSAL, FORMALIZADOR', 'select', 'manual', { options: ['SUCURSAL', 'FORMALIZADOR'], caption: 'TIPO DE DESEMBOLSO' }),
-      f('atencion_analista', 'U', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'EXPERIENCIA ATENCIÒN BRINDADA POR ANALISTA' }),
-      f('atencion_formalizador', 'V', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'EXPERIENCIA O ATENCIÒN BRINDADA POR EL FORMALIZADOR O EJECUTIVO DE CRÉDITO EN SUCURSAL' }),
+      f('atencion_analista', 'U', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'EXPERIENCIA ATENCIÓN BRINDADA POR ANALISTA' }),
+      f('atencion_formalizador', 'V', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'EXPERIENCIA O ATENCIÓN BRINDADA POR EL FORMALIZADOR O EJECUTIVO DE CRÉDITO EN SUCURSAL' }),
     ],
   },
   {
     title: 'Asistencias, documentación y fechas de pago',
+    obligatorioSiAceptacion: true,
     fields: [
       f('conoce_asistencias', 'W', 'SI , NO', 'sino', 'manual', {caption: 'YA CONOCE SOBRE LOS BENEFICIOS ADICIONALES DE NUESTRAS ASISTENCIAS?' }),
       f('ofrecieron_asistencia', 'X', 'SI , NO', 'sino', 'manual', {caption: 'LE OFRECIERON ADQUIRIR ALGUNA ASISTENCIA?' }),
@@ -148,6 +158,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Cierre y observaciones',
+    obligatorioSiAceptacion: true,
     fields: [
       f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
@@ -166,11 +177,17 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Comentario y sospecha',
+    obligatorioSiAceptacion: true,
     fields: [
       f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
       // Si es SI, la línea se resalta en rojo tenue en las tablas y queda disponible para análisis por promotor, canal y solicitud
       f('caso_sospecha', '', 'CASO TIENE SOSPECHA', 'sino', 'manual'),
-      f('queja', '', 'QUEJA', 'select', 'manual', { groupedOptions: QUEJA_CATEGORIAS }),
+      f('queja_categoria', '', 'QUEJA · CATEGORÍA', 'select', 'manual', { options: QUEJA_CATEGORIAS_OPCIONES }),
+      // Segunda lista: depende de la categoría; con «Sin Queja» se omite
+      f('queja', '', 'QUEJA · DETALLE', 'select', 'manual', {
+        opcionesSegun: { campo: 'queja_categoria', mapa: QUEJA_DETALLE_POR_CATEGORIA },
+        visibleSi: { campo: 'queja_categoria', cumple: (v) => v !== '' && v !== SIN_QUEJA },
+      }),
     ],
   },
 ]
@@ -188,6 +205,7 @@ export function encuestaProgreso(r: Llamada): { llenos: number; total: number } 
     'caso_sospecha',
     'numero_pertenece_a',
     'queja',
+    'queja_categoria',
   ]
   const campos = MANUAL_FIELDS.filter((x) => !excluidos.includes(x.key))
   const llenos = campos.filter((x) => {

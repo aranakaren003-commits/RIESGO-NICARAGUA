@@ -19,6 +19,7 @@ export interface FilaImportar {
   email: string | null // Correo_MK
   sucursal: string | null // Suc Origen
   origen: string | null // Medio Captacion
+  llave: string | null // Llave (Comprobante_Consecutivo), para cruzar con el CIT; importar_lote() la ignora
   ord: number // orden dentro del archivo, para deduplicar por cédula de forma determinista
 }
 
@@ -51,14 +52,14 @@ const limpia = (v: string | undefined): string | null => {
   return t === '' ? null : t
 }
 
-// "DD/MM/YYYY HH:mm:ss" (hora del país) -> instante ISO + período aaaa-mm
+// "D/M/YYYY H:mm[:ss]" con o sin ceros a la izquierda (hora del país) -> instante ISO + período aaaa-mm
 function parseFecha(v: string | undefined, tz: string): { iso: string; periodo: string } | null {
   const t = limpia(v)
   if (!t) return null
-  const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/)
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
   if (!m) return null
-  const [, dd, mm, yyyy, hh = '00', mi = '00', ss = '00'] = m
-  return { iso: paredAIso(+yyyy, +mm, +dd, +hh, +mi, +ss, tz), periodo: `${yyyy}-${mm}` }
+  const [, dd, mm, yyyy, hh = '0', mi = '0', ss = '0'] = m
+  return { iso: paredAIso(+yyyy, +mm, +dd, +hh, +mi, +ss, tz), periodo: `${yyyy}-${mm.padStart(2, '0')}` }
 }
 
 export function leerBitacora(texto: string, tz: string): ResultadoLectura {
@@ -108,6 +109,7 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
       email: limpia(r['Correo_MK']),
       sucursal: limpia(r['Suc Origen']),
       origen: limpia(r['Medio Captacion']),
+      llave: limpia(r['Llave']) ?? (comprobante && consecutivo && consecutivo !== '0' ? `${comprobante}_${consecutivo}` : null),
       ord: res.elegibles.length,
     })
   }

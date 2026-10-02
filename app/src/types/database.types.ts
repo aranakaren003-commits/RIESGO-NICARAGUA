@@ -23,6 +23,7 @@ export type Llamada = {
   numero_pertenece_a: string | null
   numero_equivocado_gestionado: boolean
   queja: string | null
+  queja_categoria: string | null
   tipo_credito: string | null
   promotor: string | null
   categorizacion: string | null
@@ -91,6 +92,7 @@ export type VCola = {
   id_pais: string
   periodo: string
   cliente: string
+  estado: string | null
   tipo_credito: string | null
   telefono: string | null
   cedula: string | null
@@ -154,8 +156,7 @@ export type CargaCit = {
 
 export type ResumenEstatusPeriodo = {
   total_base: number
-  aceptacion: number
-  no_aceptacion: number
+  contestacion: number // ACEPTACION + NO ACEPTACION
   buzon: number
   no_contesta: number
   devolver_llamada: number
