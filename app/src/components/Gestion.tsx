@@ -21,6 +21,8 @@ const SEGMENTOS: { valor: string; titulo: string }[] = [
   { valor: 'DEVOLVER LLAMADA', titulo: 'Devolver llamada' },
 ]
 
+type Resultado = 'NO CONTESTA' | 'BUZON' | 'CONTESTA' | 'APROBADO SIN FORMALIZAR'
+
 const REFRESCO_MS = 60_000 // las devoluciones de llamada suben en la cola conforme se acerca su hora
 
 function periodosRecientes(tz: string, cuantos = 12): string[] {
@@ -91,8 +93,10 @@ export default function Gestion() {
     if (periodo) q = q.eq('periodo', periodo)
     const t = texto.trim()
     if (t) q = q.ilike('cedula', `%${t}%`)
-    if (segmento === 'sin') q = q.is('estatus_llamada', null)
-    else if (segmento) q = q.eq('estatus_llamada', segmento)
+    // Las devoluciones de llamada vigentes (desde 10 min antes de la hora acordada) aparecen en cualquier filtro
+    if (segmento === 'sin') q = q.or('estatus_llamada.is.null,orden_estatus.eq.0')
+    else if (segmento === 'DEVOLVER LLAMADA') q = q.eq('estatus_llamada', segmento)
+    else if (segmento) q = q.or(`estatus_llamada.eq.${segmento},orden_estatus.eq.0`)
     const { data, count, error } = await q
       .order('orden_estatus', { ascending: true })
       .order('devolver_llamada_en', { ascending: true, nullsFirst: false })
@@ -115,7 +119,8 @@ export default function Gestion() {
     return () => clearInterval(id)
   }, [cargar, abierto])
 
-  async function registrar(fila: VCola, resultado: 'NO CONTESTA' | 'BUZON' | 'CONTESTA') {
+  async function registrar(fila: VCola, resultado: Resultado) {
+    if (resultado === 'APROBADO SIN FORMALIZAR' && !window.confirm(`¿Marcar a ${fila.cliente} como APROBADO SIN FORMALIZAR? La línea sale de la cola.`)) return
     setError('')
     setOcupado(fila.id)
     const { data, error } = await sb.rpc('registrar_intento', { p_id: fila.id, p_resultado: resultado })
@@ -181,8 +186,7 @@ export default function Gestion() {
           <div className="resumen-chips">
             {(
               [
-                ['Aceptación', resumen.aceptacion],
-                ['No aceptación', resumen.no_aceptacion],
+                ['Contestación', resumen.contestacion],
                 ['Buzón', resumen.buzon],
                 ['No contesta', resumen.no_contesta],
                 ['Devolver llamada', resumen.devolver_llamada],
@@ -206,17 +210,19 @@ export default function Gestion() {
         <div className="tabla-envoltorio">
           <table className="sin-clic tabla-gestion">
             <colgroup>
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '19%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '11%' }} />
               <col style={{ width: '10%' }} />
-              <col style={{ width: '13%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '22%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '6%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th>CLIENTE</th>
+                <th>ESTADO</th>
                 <th>TIPO DE CRÉDITO</th>
                 <th>LLAVE DE CRÉDITO</th>
                 <th>TELEFONO</th>
@@ -229,6 +235,7 @@ export default function Gestion() {
               {filas.map((f) => (
                 <tr key={f.id} className={f.orden_estatus === 0 ? 'fila-devolver' : ''}>
                   <td title={f.cliente}>{f.cliente}</td>
+                  <td title={f.estado ?? ''}>{f.estado}</td>
                   <td title={f.tipo_credito ?? ''}>{f.tipo_credito}</td>
                   <td>{f.llave_credito}</td>
                   <td>{f.telefono}</td>
@@ -240,12 +247,13 @@ export default function Gestion() {
                         value={f.estatus_llamada ?? ''}
                         disabled={ocupado === f.id}
                         aria-label={`Estatus de llamada de ${f.cliente}`}
-                        onChange={(e) => registrar(f, e.target.value as 'NO CONTESTA' | 'BUZON' | 'CONTESTA')}
+                        onChange={(e) => registrar(f, e.target.value as Resultado)}
                       >
                         <option value="" disabled>Sin asignar</option>
                         <option value="NO CONTESTA">NO CONTESTA</option>
                         <option value="BUZON">BUZON</option>
                         <option value="CONTESTA">CONTESTA</option>
+                        <option value="APROBADO SIN FORMALIZAR">APROBADO SIN FORMALIZAR</option>
                         {f.estatus_llamada === 'DEVOLVER LLAMADA' && <option value="DEVOLVER LLAMADA" disabled>DEVOLVER LLAMADA</option>}
                       </select>
                       {f.estatus_llamada === 'DEVOLVER LLAMADA' && f.devolver_llamada_en && (

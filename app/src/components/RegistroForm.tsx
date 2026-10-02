@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sb } from '../lib/supabase'
-import { FIELD_GROUPS, esProducto, type FieldDef } from '../lib/fields'
+import { FIELD_GROUPS, esProducto, type FieldDef, type FieldGroup } from '../lib/fields'
 import { isoToLocalInput, localInputToIso, periodoDe } from '../lib/fechas'
 import { usePais } from '../lib/pais'
 import type { Database, Llamada } from '../types/database.types'
@@ -51,13 +51,25 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
       .then(({ data }) => setObligatorios(new Set((data ?? []).map((c) => c.campo))))
   }, [registro?.id_pais, pais.id])
 
-  const cambia = (k: string, v: string) => setValores((p) => ({ ...p, [k]: v }))
+  // Al cambiar un campo se limpian las listas que dependen de él (p. ej. el detalle de la queja al cambiar la categoría)
+  const cambia = (k: string, v: string) =>
+    setValores((p) => {
+      const n = { ...p, [k]: v }
+      for (const g of FIELD_GROUPS) for (const f of g.fields) if (f.opcionesSegun?.campo === k) n[f.key] = ''
+      return n
+    })
 
   // Un campo condicional (p. ej. la fecha para devolver la llamada) solo se muestra cuando otro campo tiene cierto valor
-  const visible = (f: FieldDef) => !f.visibleSi || valores[f.visibleSi.campo] === f.visibleSi.valor
+  const visible = (f: FieldDef) => !f.visibleSi || f.visibleSi.cumple(valores[f.visibleSi.campo] ?? '')
+
+  // La sección pide sus preguntas por tipo de producto, o cuando el estatus de llamada es ACEPTACION
+  const grupoPideDe = (g: FieldGroup) =>
+    (!!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)) || (!!g.obligatorioSiAceptacion && valores.estatus_llamada === 'ACEPTACION')
 
   const esObligatorio = (f: FieldDef, grupoPide: boolean) =>
-    !f.readOnly && visible(f) && (grupoPide || !!f.visibleSi || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada'))
+    !f.readOnly &&
+    visible(f) &&
+    ((grupoPide && f.source === 'manual') || !!f.visibleSi || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada'))
 
   async function guardar() {
     setError('')
@@ -70,7 +82,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     for (const g of FIELD_GROUPS) {
       const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
       if (!aplica) continue
-      const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
+      const grupoPide = grupoPideDe(g)
       for (const f of g.fields) if (esObligatorio(f, grupoPide) && !valores[f.key].trim()) faltan.push(f.caption ?? f.label)
     }
     if (faltan.length) return setError(`Campos obligatorios sin completar: ${faltan.join(' · ')}.`)
@@ -125,21 +137,12 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     const v = valores[f.key]
     const bloqueado = f.readOnly || (f.fijoEnEdicion && !!registro)
     let control
-    if (f.type === 'select' && f.groupedOptions) {
-      const todas = f.groupedOptions.flatMap((g) => g.opciones)
-      control = (
-        <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
-          <option value="">—</option>
-          {f.groupedOptions.map((g) => (
-            <optgroup key={g.categoria} label={g.categoria}>
-              {g.opciones.map((o) => <option key={o} value={o}>{o}</option>)}
-            </optgroup>
-          ))}
-          {v && !todas.includes(v) && <option value={v}>{v}</option>}
-        </select>
-      )
-    } else if (f.type === 'select') {
-      const opciones = modoDigitador && f.key === 'estatus_llamada' ? ESTATUS_FINAL : f.options
+    if (f.type === 'select') {
+      const opciones = f.opcionesSegun
+        ? (f.opcionesSegun.mapa[valores[f.opcionesSegun.campo]] ?? [])
+        : modoDigitador && f.key === 'estatus_llamada'
+          ? ESTATUS_FINAL
+          : f.options
       control = (
         <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
           <option value="">—</option>
@@ -179,16 +182,14 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
         />
       )
     }
-    // En los campos si/no, la etiqueta en negrita es la pregunta (f.caption); se omite el nombre técnico de columna ("SI , NO").
-    const tituloVisible = f.type === 'sino' ? (f.caption ?? f.label) : f.label
-    const preguntaSecundaria = f.type === 'sino' ? null : f.caption
+    // La etiqueta en negrita es la pregunta (f.caption); se omite el nombre técnico de columna ("BUENO ,MALO, REGULAR", "SI , NO").
+    const tituloVisible = f.caption ?? f.label
     return (
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
         <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
           {tituloVisible}
           {obligatorio && <span className="req" title="Obligatorio"> *</span>}
         </label>
-        {preguntaSecundaria && <div className="pregunta">{preguntaSecundaria}</div>}
         {control}
       </div>
     )
@@ -208,7 +209,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
             const todoFijo = todoBitacora && g.fields.every((f) => f.readOnly || f.fijoEnEdicion)
             const origen = todoBitacora ? (todoFijo ? 'bitacora-fijo' : 'bitacora') : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
             const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
-            const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
+            const grupoPide = grupoPideDe(g)
             return (
               <section key={g.title} className={`tarjeta grupo${aplica ? '' : ' inactivo'}`}>
                 <h3>
@@ -219,7 +220,11 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
                   )}
                   {origen === 'manual' && <span className="etiqueta-origen manual">Ingreso del usuario</span>}
                   {g.aplicaA && !aplica && <span className="etiqueta-origen bitacora">Solo aplica a créditos de tipo {g.aplicaA.toUpperCase()}</span>}
-                  {grupoPide && <span className="etiqueta-origen obligatorio">Obligatorio para {g.obligatorioEn?.toUpperCase()}</span>}
+                  {grupoPide && (
+                    <span className="etiqueta-origen obligatorio">
+                      {g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn) ? `Obligatorio para ${g.obligatorioEn.toUpperCase()}` : 'Obligatorio con ACEPTACION'}
+                    </span>
+                  )}
                 </h3>
                 <fieldset className="sin-borde" disabled={!aplica}>
                   <div className="rejilla">{g.fields.filter(visible).map((f) => campo(f, aplica && esObligatorio(f, grupoPide)))}</div>

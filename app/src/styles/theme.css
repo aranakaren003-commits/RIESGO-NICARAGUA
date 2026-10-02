@@ -226,6 +226,7 @@ button.barra-fila.atenuada { opacity: 0.55; }
 .chip-pais { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--azul); font-size: 13px; padding: 8px 4px; }
 .pastel-envoltorio { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
 .pastel { width: 96px; height: 96px; border-radius: 50%; flex-shrink: 0; }
+.pastel.dona { width: 120px; height: 120px; -webkit-mask: radial-gradient(circle, transparent 46%, #000 47%); mask: radial-gradient(circle, transparent 46%, #000 47%); }
 .pastel-leyenda { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .pastel-leyenda span { display: flex; align-items: center; gap: 6px; }
 .pastel-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
