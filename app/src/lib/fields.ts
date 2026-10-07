@@ -187,8 +187,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
 ]
 
-// Con estatus ACEPTACION son obligatorias las preguntas (campos con encabezado de pregunta, sospecha, queja y género); los comentarios libres no.
-const CLAVES_PREGUNTA: FieldKey[] = ['caso_sospecha', 'queja_categoria', 'queja', 'genero']
+// Con estatus ACEPTACION son obligatorias las preguntas (campos con encabezado de pregunta y género); los comentarios libres, la sospecha y la queja no.
+const CLAVES_PREGUNTA: FieldKey[] = ['genero']
 export const esPreguntaDeAceptacion = (x: FieldDef): boolean =>
   x.source === 'manual' && !x.readOnly && x.type !== 'textarea' && (!!x.caption || CLAVES_PREGUNTA.includes(x.key))
 

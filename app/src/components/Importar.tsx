@@ -129,7 +129,7 @@ export default function Importar() {
         </label>
       </div>
       <div className="aviso info" style={{ marginBottom: 12 }}>
-        Solo se importan los créditos con ESTADO: {ESTADOS_IMPORTABLES.map((e) => e.toLowerCase()).join(', ')}. El resto se omite, igual que el tipo de crédito Convenio. Si dos filas del mismo
+        Solo se importan los créditos con ESTADO: {ESTADOS_IMPORTABLES.map((e) => e.toLowerCase()).join(', ')}. El resto se omite, igual que el tipo de crédito Convenio y los créditos reestructurados (MODALIDAD con «REEST» o CATEGORIZACIÓN = REESTRUCTURACION). Si dos filas del mismo
         período comparten cédula, solo se importa la primera (duplicidad de cliente). Un crédito con ESTADO «Aprobado Informa» se marca como «Aprobado sin formalizar» y no entra a la cola
         de llamadas. Los registros que ya existen en {pais.nombre} no se modifican (se conservan las ediciones), pero quedan ligados a la nueva carga.
       </div>
@@ -137,7 +137,7 @@ export default function Importar() {
       {lectura && (
         <div className="aviso info" style={{ marginBottom: 12 }}>
           <strong>{archivo}</strong>: {lectura.totalFilas.toLocaleString('es-NI')} filas leídas · {lectura.elegibles.length.toLocaleString('es-NI')} a importar ·{' '}
-          {lectura.fueraDeEstado.toLocaleString('es-NI')} omitidas por ESTADO · {lectura.fueraDeTipo.toLocaleString('es-NI')} Convenio · {lectura.duplicadosEnArchivo} duplicadas en el archivo ·{' '}
+          {lectura.fueraDeEstado.toLocaleString('es-NI')} omitidas por ESTADO · {lectura.fueraDeTipo.toLocaleString('es-NI')} Convenio · {lectura.reestructurados.toLocaleString('es-NI')} reestructurados · {lectura.duplicadosEnArchivo} duplicadas en el archivo ·{' '}
           {lectura.sinDatos} sin número de solicitud o cliente.
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
             {Object.entries(lectura.porEstado).map(([e, n]) => <li key={e}>{e}: {n.toLocaleString('es-NI')}</li>)}

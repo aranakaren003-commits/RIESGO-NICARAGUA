@@ -44,6 +44,7 @@ export interface ResultadoLectura {
   porEstado: Record<string, number> // elegibles por ESTADO
   fueraDeEstado: number
   fueraDeTipo: number // tipo de crédito CONVENIO(S): no se importa
+  reestructurados: number // MODALIDAD con «REEST» o CATEGORIZACIÓN = REESTRUCTURACION: no se importan
   duplicadosEnArchivo: number
   sinDatos: number
 }
@@ -96,7 +97,7 @@ export function aplicarCit(filas: FilaImportar[], cit: FilaCit[]): number {
 export function leerBitacora(texto: string, tz: string): ResultadoLectura {
   const parsed = Papa.parse<Record<string, string>>(texto, { header: true, delimiter: ';', skipEmptyLines: true })
   const vistos = new Set<number>()
-  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], porEstado: {}, fueraDeEstado: 0, fueraDeTipo: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
+  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], porEstado: {}, fueraDeEstado: 0, fueraDeTipo: 0, reestructurados: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
 
   for (const r of parsed.data) {
     const solicitud = Number((r['Num Solicitud'] ?? '').trim())
@@ -112,6 +113,10 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
     }
     if (normaliza(r['Tipo Credito'] ?? '').startsWith('CONVENIO')) {
       res.fueraDeTipo++
+      continue
+    }
+    if (normaliza(r['Modalidad'] ?? '').includes('REEST') || normaliza(r['Categorizacion'] ?? '').startsWith('REEST')) {
+      res.reestructurados++
       continue
     }
     if (vistos.has(solicitud)) {
