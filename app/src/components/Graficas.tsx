@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import { origenLlamadas } from '../lib/consultas'
 import { sb } from '../lib/supabase'
-import { ALL_FIELDS, QUEJA_CATEGORIAS, type FieldKey } from '../lib/fields'
+import { ALL_FIELDS, SIN_QUEJA, type FieldKey } from '../lib/fields'
 import { fmtFechaHora, hoyEn } from '../lib/fechas'
 import { P, type Permisos } from '../lib/permisos'
 import type { Llamada, Pais, ResumenEstatusPeriodo } from '../types/database.types'
@@ -63,7 +63,7 @@ function contar(filas: Fila[], key: FieldKey, top?: number) {
 
 const COLORES_PASTEL = ['#4c9c2e', '#002554', '#ee212e', '#677c98', '#f2c200', '#8e44ad', '#16a085', '#d35400', '#7f8c8d', '#2980b9']
 
-function Pastel({ datos }: { datos: [string, number][] }) {
+function Pastel({ datos, onElegir }: { datos: [string, number][]; onElegir?: (nombre: string) => void }) {
   const total = datos.reduce((s, [, n]) => s + n, 0)
   if (total === 0) return null
   let acumulado = 0
@@ -77,12 +77,21 @@ function Pastel({ datos }: { datos: [string, number][] }) {
     <div className="pastel-envoltorio">
       <div className="pastel" style={{ background: `conic-gradient(${segmentos.join(', ')})` }} />
       <div className="pastel-leyenda">
-        {datos.map(([nombre, n], i) => (
-          <span key={nombre}>
-            <i style={{ background: COLORES_PASTEL[i % COLORES_PASTEL.length] }} />
-            {nombre} · {n} ({Math.round((n / total) * 100)}%)
-          </span>
-        ))}
+        {datos.map(([nombre, n], i) => {
+          const contenido = (
+            <>
+              <i style={{ background: COLORES_PASTEL[i % COLORES_PASTEL.length] }} />
+              {nombre} · {n} ({Math.round((n / total) * 100)}%)
+            </>
+          )
+          return onElegir ? (
+            <button key={nombre} className="pastel-item" onClick={() => onElegir(nombre)} title={`Ver el detalle de ${nombre}`}>
+              {contenido}
+            </button>
+          ) : (
+            <span key={nombre}>{contenido}</span>
+          )
+        })}
       </div>
     </div>
   )
@@ -118,6 +127,7 @@ export default function Dashboard({ permisos, esRegional, pais }: Props) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [filtros, setFiltros] = useState<Filtros>({})
+  const [quejaCat, setQuejaCat] = useState<string | null>(null)
 
   useEffect(() => {
     let activo = true
@@ -197,13 +207,9 @@ export default function Dashboard({ permisos, esRegional, pais }: Props) {
     URL.revokeObjectURL(a.href)
   }
 
-  const datosQueja = contar(filtradas, 'queja')
-  const categoriaDeOpcion = (opcion: string) => QUEJA_CATEGORIAS.find((c) => c.opciones.includes(opcion))?.categoria ?? 'Otra'
-  const datosQuejaCategoria = (() => {
-    const m = new Map<string, number>()
-    for (const [op, n] of datosQueja) m.set(categoriaDeOpcion(op), (m.get(categoriaDeOpcion(op)) ?? 0) + n)
-    return [...m.entries()].sort((a, b) => b[1] - a[1])
-  })()
+  // Queja: la dona muestra solo las categorías (incluida «Sin Queja»); al elegir una se expande a su detalle
+  const datosQuejaCategoria = contar(filtradas, 'queja_categoria')
+  const datosQuejaDetalle = quejaCat ? contar(filtradas.filter((r) => r.queja_categoria === quejaCat), 'queja') : []
   const datosPromotorSospecha = contar(
     filtradas.filter((r) => r.caso_sospecha === 'SI'),
     'promotor',
@@ -277,8 +283,7 @@ export default function Dashboard({ permisos, esRegional, pais }: Props) {
               <div className="sub">Congelado al cierre del día 4 del mes siguiente ({periodo}) · base: {resumenPeriodo.total_base.toLocaleString('es-NI')} registros válidos</div>
               {(
                 [
-                  ['Aceptación', resumenPeriodo.aceptacion],
-                  ['No aceptación', resumenPeriodo.no_aceptacion],
+                  ['% Contestación', resumenPeriodo.aceptacion + resumenPeriodo.no_aceptacion],
                   ['Buzón', resumenPeriodo.buzon],
                   ['No contesta', resumenPeriodo.no_contesta],
                   ['Devolver llamada', resumenPeriodo.devolver_llamada],
@@ -297,20 +302,16 @@ export default function Dashboard({ permisos, esRegional, pais }: Props) {
 
           <div className="graficas">
             <section className="tarjeta grafica">
-              <h3>Categorización de la queja</h3>
-              <div className="sub">{datosQueja.reduce((s, [, n]) => s + n, 0).toLocaleString('es-NI')} respuestas</div>
-              {datosQuejaCategoria.length === 0 && <div className="sub">Sin datos para esta selección.</div>}
-              {datosQuejaCategoria.map(([nombre, n]) => {
-                const max = datosQuejaCategoria[0]?.[1] ?? 1
-                return (
-                  <div key={nombre} className="barra-fila">
-                    <span className="nombre">{nombre}</span>
-                    <span className="pista"><span className="relleno" style={{ width: `${(n / max) * 100}%`, display: 'block' }} /></span>
-                    <span className="num">{n}</span>
-                  </div>
-                )
-              })}
-              <Pastel datos={datosQuejaCategoria} />
+              <h3>{quejaCat ? `Queja · ${quejaCat}` : 'Categorización de la queja'}</h3>
+              <div className="sub">
+                {quejaCat ? (
+                  <button className="enlace" onClick={() => setQuejaCat(null)}>← Volver a las categorías</button>
+                ) : (
+                  'Clic en una categoría para ver su detalle'
+                )}
+              </div>
+              {(quejaCat ? datosQuejaDetalle : datosQuejaCategoria).length === 0 && <div className="sub">Sin datos para esta selección.</div>}
+              <Pastel datos={quejaCat ? datosQuejaDetalle : datosQuejaCategoria} onElegir={quejaCat ? undefined : (n) => n !== SIN_QUEJA && setQuejaCat(n)} />
             </section>
 
             {!esRegional && (

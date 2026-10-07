@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sb } from '../lib/supabase'
-import { FIELD_GROUPS, esProducto, type FieldDef } from '../lib/fields'
+import { FIELD_GROUPS, esPreguntaDeAceptacion, esProducto, type FieldDef } from '../lib/fields'
 import { isoToLocalInput, localInputToIso, periodoDe } from '../lib/fechas'
 import { usePais } from '../lib/pais'
 import type { Database, Llamada } from '../types/database.types'
@@ -51,15 +51,27 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
       .then(({ data }) => setObligatorios(new Set((data ?? []).map((c) => c.campo))))
   }, [registro?.id_pais, pais.id])
 
-  const cambia = (k: string, v: string) => setValores((p) => ({ ...p, [k]: v }))
+  // Al cambiar un campo se vacían los campos que dependen de él (p. ej. el detalle de la queja al cambiar la categoría)
+  const cambia = (k: string, v: string) =>
+    setValores((p) => {
+      const n = { ...p, [k]: v }
+      for (const g of FIELD_GROUPS) for (const f of g.fields) if (f.opcionesDe?.campo === k) n[f.key] = ''
+      return n
+    })
 
   // Un campo condicional (p. ej. la fecha para devolver la llamada) solo se muestra cuando otro campo tiene cierto valor
-  const visible = (f: FieldDef) => !f.visibleSi || valores[f.visibleSi.campo] === f.visibleSi.valor
+  const visible = (f: FieldDef) =>
+    (!f.visibleSi || valores[f.visibleSi.campo] === f.visibleSi.valor) && (!f.opcionesDe || !!f.opcionesDe.mapa[valores[f.opcionesDe.campo]])
 
-  const esObligatorio = (f: FieldDef, grupoPide: boolean) =>
-    !f.readOnly && visible(f) && (grupoPide || !!f.visibleSi || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada'))
+  const esAceptacion = valores.estatus_llamada === 'ACEPTACION'
 
-  async function guardar() {
+  const esObligatorio = (f: FieldDef, grupoPide: boolean, aceptacionPide = false) =>
+    !f.readOnly &&
+    visible(f) &&
+    (grupoPide || !!f.visibleSi || obligatorios.has(f.key) || (modoDigitador && f.key === 'estatus_llamada') || (aceptacionPide && esPreguntaDeAceptacion(f)))
+
+  // sinTerminar: el Digitador guarda lo capturado y la solicitud queda en la cola con estatus CONTESTA para seguir editándola después
+  async function guardar(sinTerminar = false) {
     setError('')
     const cliente = valores.cliente.trim()
     const solicitud = Number(valores.numero_solicitud)
@@ -67,12 +79,14 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     if (!Number.isInteger(solicitud) || solicitud <= 0) return setError('NUMERO DE SOLICITUD debe ser un número entero positivo.')
 
     const faltan: string[] = []
-    for (const g of FIELD_GROUPS) {
-      const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
-      if (!aplica) continue
-      const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
-      for (const f of g.fields) if (esObligatorio(f, grupoPide) && !valores[f.key].trim()) faltan.push(f.caption ?? f.label)
-    }
+    if (!sinTerminar)
+      for (const g of FIELD_GROUPS) {
+        const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
+        if (!aplica) continue
+        const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
+        const aceptacionPide = !!g.obligatorioConAceptacion && esAceptacion
+        for (const f of g.fields) if (esObligatorio(f, grupoPide, aceptacionPide) && !valores[f.key].trim()) faltan.push(f.caption ?? f.label)
+      }
     if (faltan.length) return setError(`Campos obligatorios sin completar: ${faltan.join(' · ')}.`)
 
     const payload: Record<string, string | number | null> = {}
@@ -89,6 +103,11 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     }
     const iso = payload.fecha_formalizado
     payload.periodo = typeof iso === 'string' ? periodoDe(iso, tz) : (registro?.periodo ?? periodoDe(new Date().toISOString(), tz))
+    if (sinTerminar) {
+      payload.estatus_llamada = 'CONTESTA'
+      payload.devolver_llamada_en = null
+      payload.numero_pertenece_a = null
+    }
     const estatusFinal = (payload.estatus_llamada as string | null) ?? ''
 
     setGuardando(true)
@@ -125,21 +144,8 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     const v = valores[f.key]
     const bloqueado = f.readOnly || (f.fijoEnEdicion && !!registro)
     let control
-    if (f.type === 'select' && f.groupedOptions) {
-      const todas = f.groupedOptions.flatMap((g) => g.opciones)
-      control = (
-        <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
-          <option value="">—</option>
-          {f.groupedOptions.map((g) => (
-            <optgroup key={g.categoria} label={g.categoria}>
-              {g.opciones.map((o) => <option key={o} value={o}>{o}</option>)}
-            </optgroup>
-          ))}
-          {v && !todas.includes(v) && <option value={v}>{v}</option>}
-        </select>
-      )
-    } else if (f.type === 'select') {
-      const opciones = modoDigitador && f.key === 'estatus_llamada' ? ESTATUS_FINAL : f.options
+    if (f.type === 'select') {
+      const opciones = f.opcionesDe ? f.opcionesDe.mapa[valores[f.opcionesDe.campo]] : modoDigitador && f.key === 'estatus_llamada' ? ESTATUS_FINAL : f.options
       control = (
         <select id={id} value={v} onChange={(e) => cambia(f.key, e.target.value)}>
           <option value="">—</option>
@@ -179,23 +185,21 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
         />
       )
     }
-    // En los campos si/no, la etiqueta en negrita es la pregunta (f.caption); se omite el nombre técnico de columna ("SI , NO").
-    const tituloVisible = f.type === 'sino' ? (f.caption ?? f.label) : f.label
-    const preguntaSecundaria = f.type === 'sino' ? null : f.caption
+    // El encabezado visible es la pregunta (f.caption); se omite el nombre técnico de columna ("BUENO, MALO, REGULAR", "SI , NO").
+    const tituloVisible = f.caption ?? f.label
     return (
       <div key={f.key} className={`campo${f.type === 'textarea' || (f.caption && f.caption.length > 60) ? ' ancho' : ''}`}>
         <label id={`${id}-lbl`} htmlFor={f.type === 'sino' ? undefined : id}>
           {tituloVisible}
           {obligatorio && <span className="req" title="Obligatorio"> *</span>}
         </label>
-        {preguntaSecundaria && <div className="pregunta">{preguntaSecundaria}</div>}
         {control}
       </div>
     )
   }
 
   return (
-    <div className="velo" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="velo" onMouseDown={(e) => soloLectura && e.target === e.currentTarget && onClose()}>
       <div className="panel" role="dialog" aria-modal="true">
         <div className="panel-cab">
           <h2>{registro ? `${registro.cliente}` : 'Nuevo registro'}</h2>
@@ -209,6 +213,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
             const origen = todoBitacora ? (todoFijo ? 'bitacora-fijo' : 'bitacora') : g.fields.every((f) => f.source === 'manual') ? 'manual' : null
             const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
             const grupoPide = !!g.obligatorioEn && esProducto(valores.tipo_credito, g.obligatorioEn)
+            const aceptacionPide = !!g.obligatorioConAceptacion && esAceptacion
             return (
               <section key={g.title} className={`tarjeta grupo${aplica ? '' : ' inactivo'}`}>
                 <h3>
@@ -222,7 +227,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
                   {grupoPide && <span className="etiqueta-origen obligatorio">Obligatorio para {g.obligatorioEn?.toUpperCase()}</span>}
                 </h3>
                 <fieldset className="sin-borde" disabled={!aplica}>
-                  <div className="rejilla">{g.fields.filter(visible).map((f) => campo(f, aplica && esObligatorio(f, grupoPide)))}</div>
+                  <div className="rejilla">{g.fields.filter(visible).map((f) => campo(f, aplica && esObligatorio(f, grupoPide, aceptacionPide)))}</div>
                 </fieldset>
               </section>
             )
@@ -233,7 +238,12 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
           {soloLectura && <div className="aviso info">Solo lectura: tu puesto no permite modificar registros.</div>}
           <div className="espacio" />
           <button className="btn secundario" onClick={onClose}>{soloLectura ? 'Cerrar' : 'Cancelar'}</button>
-          {!soloLectura && <button className="btn" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>}
+          {!soloLectura && modoDigitador && (
+            <button className="btn secundario" onClick={() => guardar(true)} disabled={guardando} title="Guarda lo capturado; la solicitud queda en la lista como CONTESTA para continuar después">
+              Guardar sin terminar
+            </button>
+          )}
+          {!soloLectura && <button className="btn" onClick={() => guardar()} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>}
         </div>
       </div>
     </div>

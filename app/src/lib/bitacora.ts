@@ -1,5 +1,6 @@
 import Papa from 'papaparse'
 import { paredAIso } from './fechas'
+import type { FilaCit } from './cit'
 
 // Fila lista para enviar a importar_lote(); las claves coinciden con las columnas de la función.
 export interface FilaImportar {
@@ -42,6 +43,7 @@ export interface ResultadoLectura {
   elegibles: FilaImportar[]
   porEstado: Record<string, number> // elegibles por ESTADO
   fueraDeEstado: number
+  fueraDeTipo: number // tipo de crédito CONVENIO(S): no se importa
   duplicadosEnArchivo: number
   sinDatos: number
 }
@@ -61,10 +63,40 @@ function parseFecha(v: string | undefined, tz: string): { iso: string; periodo: 
   return { iso: paredAIso(+yyyy, +mm, +dd, +hh, +mi, +ss, tz), periodo: `${yyyy}-${mm}` }
 }
 
+// Solo CREDITO NUEVO y REFINANCIAMIENTO; cualquier otra categorización queda vacía
+function categorizacion(v: string | undefined): string | null {
+  const t = normaliza(v ?? '')
+  if (t === 'NUEVO' || t === 'CREDITO NUEVO') return 'CREDITO NUEVO'
+  if (t === 'REFINANCIAMIENTO') return 'REFINANCIAMIENTO'
+  return null
+}
+
+// «MAS30429» (INFORMA) -> «MAS_30429», la llave de crédito que trae el CIT
+export function llaveDeInforma(informa: string | null): string | null {
+  const m = (informa ?? '').match(/^([^0-9]+)([0-9]+)$/)
+  return m ? `${m[1]}_${m[2]}` : null
+}
+
+// Une la bitácora con el CIT por la llave de crédito: el período de cada crédito es el mes de su f_ultima_formalizacion en el CIT.
+// Los créditos sin coincidencia conservan el período que sale de su propia fecha. Devuelve cuántos calzaron.
+export function aplicarCit(filas: FilaImportar[], cit: FilaCit[]): number {
+  const porLlave = new Map(cit.map((c) => [c.llave_credito, c.f_ultima_formalizacion.slice(0, 7)]))
+  let calzaron = 0
+  for (const f of filas) {
+    const llave = llaveDeInforma(f.informa)
+    const periodo = llave ? porLlave.get(llave) : undefined
+    if (periodo) {
+      f.periodo = periodo
+      calzaron++
+    }
+  }
+  return calzaron
+}
+
 export function leerBitacora(texto: string, tz: string): ResultadoLectura {
   const parsed = Papa.parse<Record<string, string>>(texto, { header: true, delimiter: ';', skipEmptyLines: true })
   const vistos = new Set<number>()
-  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], porEstado: {}, fueraDeEstado: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
+  const res: ResultadoLectura = { totalFilas: parsed.data.length, elegibles: [], porEstado: {}, fueraDeEstado: 0, fueraDeTipo: 0, duplicadosEnArchivo: 0, sinDatos: 0 }
 
   for (const r of parsed.data) {
     const solicitud = Number((r['Num Solicitud'] ?? '').trim())
@@ -76,6 +108,10 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
     const estadoNorm = normaliza(r['Estado'] ?? '')
     if (!ESTADOS_IMPORTABLES.includes(estadoNorm)) {
       res.fueraDeEstado++
+      continue
+    }
+    if (normaliza(r['Tipo Credito'] ?? '').startsWith('CONVENIO')) {
+      res.fueraDeTipo++
       continue
     }
     if (vistos.has(solicitud)) {
@@ -103,7 +139,7 @@ export function leerBitacora(texto: string, tz: string): ResultadoLectura {
       fecha_formalizado: formalizado?.iso ?? null,
       tipo_credito: limpia(r['Tipo Credito']),
       promotor: limpia(r['Promotor']),
-      categorizacion: limpia(r['Categorizacion']),
+      categorizacion: categorizacion(r['Categorizacion']),
       modalidad: limpia(r['Modalidad']),
       email: limpia(r['Correo_MK']),
       sucursal: limpia(r['Suc Origen']),

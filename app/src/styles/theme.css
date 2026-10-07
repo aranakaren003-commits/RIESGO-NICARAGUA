@@ -228,6 +228,9 @@ button.barra-fila.atenuada { opacity: 0.55; }
 .pastel { width: 96px; height: 96px; border-radius: 50%; flex-shrink: 0; }
 .pastel-leyenda { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .pastel-leyenda span { display: flex; align-items: center; gap: 6px; }
+.pastel-item { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 2px 4px; border-radius: 6px; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.pastel-item:hover { background: #eef1f4; }
+.enlace { background: none; border: 0; padding: 0; color: var(--azul); font-weight: 700; cursor: pointer; font-size: 11px; }
 .pastel-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 
 /* Selección de país */

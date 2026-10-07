@@ -19,7 +19,11 @@ const SEGMENTOS: { valor: string; titulo: string }[] = [
   { valor: 'NO CONTESTA', titulo: 'No contesta' },
   { valor: 'BUZON', titulo: 'Buzón' },
   { valor: 'DEVOLVER LLAMADA', titulo: 'Devolver llamada' },
+  { valor: 'CONTESTA', titulo: 'Contesta (en gestión)' },
 ]
+
+// Una devolución de llamada vigente (dentro de los 10 minutos previos a la hora acordada) aparece en cualquier filtro
+const DEVOLVER_VIGENTE = 'and(estatus_llamada.eq.DEVOLVER LLAMADA,orden_estatus.eq.0)'
 
 const REFRESCO_MS = 60_000 // las devoluciones de llamada suben en la cola conforme se acerca su hora
 
@@ -89,10 +93,15 @@ export default function Gestion() {
     setError('')
     let q = sb.from('v_cola_llamadas').select('*', { count: 'exact' }).eq('id_pais', pais.id)
     if (periodo) q = q.eq('periodo', periodo)
-    const t = texto.trim()
-    if (t) q = q.ilike('cedula', `%${t}%`)
-    if (segmento === 'sin') q = q.is('estatus_llamada', null)
-    else if (segmento) q = q.eq('estatus_llamada', segmento)
+    const t = texto.trim().replace(/[,()%*]/g, ' ').trim()
+    if (t) {
+      const partes = [`cedula.ilike.%${t}%`, `cliente.ilike.%${t}%`]
+      if (/^\d+$/.test(t)) partes.push(`numero_solicitud.eq.${t}`)
+      q = q.or(partes.join(','))
+    }
+    if (segmento === 'sin') q = q.or(`estatus_llamada.is.null,${DEVOLVER_VIGENTE}`)
+    else if (segmento === 'DEVOLVER LLAMADA') q = q.eq('estatus_llamada', segmento)
+    else if (segmento) q = q.or(`estatus_llamada.eq.${segmento},${DEVOLVER_VIGENTE}`)
     const { data, count, error } = await q
       .order('orden_estatus', { ascending: true })
       .order('devolver_llamada_en', { ascending: true, nullsFirst: false })
@@ -136,6 +145,19 @@ export default function Gestion() {
     await cargar()
   }
 
+  // Reabre una solicitud guardada sin terminar (CONTESTA) sin registrar un intento nuevo
+  async function continuar(fila: VCola) {
+    setError('')
+    setOcupado(fila.id)
+    const [{ data: reg, error: e1 }, { data: idIntento }] = await Promise.all([
+      sb.from('llamadas_bienvenida').select('*').eq('id', fila.id).maybeSingle(),
+      sb.rpc('intento_contesta_abierto', { p_id: fila.id }),
+    ])
+    setOcupado(null)
+    if (e1 || !reg) return setError(e1?.message ?? 'No se pudo abrir el registro.')
+    setAbierto({ registro: reg, intentoId: idIntento ?? null })
+  }
+
   const paginas = Math.max(1, Math.ceil(total / TAM))
 
   return (
@@ -149,8 +171,8 @@ export default function Gestion() {
           </select>
         </label>
         <label>
-          Buscar cédula
-          <input placeholder="Cédula…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 200 }} />
+          Buscar
+          <input placeholder="Cédula, cliente o solicitud…" value={textoInput} onChange={(e) => setTextoInput(e.target.value)} style={{ width: 240 }} />
         </label>
         <div className="segmentos" role="group" aria-label="Estatus de llamada">
           {SEGMENTOS.map((s) => (
@@ -181,8 +203,7 @@ export default function Gestion() {
           <div className="resumen-chips">
             {(
               [
-                ['Aceptación', resumen.aceptacion],
-                ['No aceptación', resumen.no_aceptacion],
+                ['% Contestación', resumen.aceptacion + resumen.no_aceptacion],
                 ['Buzón', resumen.buzon],
                 ['No contesta', resumen.no_contesta],
                 ['Devolver llamada', resumen.devolver_llamada],
@@ -199,26 +220,28 @@ export default function Gestion() {
       )}
 
       <div className="leyenda-cola">
-        <span className="muestra devolver" /> Devolver llamada vigente (desde 10 minutos antes de la hora acordada)
+        <span className="muestra devolver" /> Devolver llamada vigente (desde 10 minutos antes de la hora acordada) y solicitudes CONTESTA guardadas sin terminar
       </div>
 
       <div className="tarjeta">
         <div className="tabla-envoltorio">
           <table className="sin-clic tabla-gestion">
             <colgroup>
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '14%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '12%' }} />
               <col style={{ width: '10%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th>CLIENTE</th>
                 <th>TIPO DE CRÉDITO</th>
                 <th>LLAVE DE CRÉDITO</th>
+                <th>ESTADO</th>
                 <th>TELEFONO</th>
                 <th>FECHA DE FORMALIZADO</th>
                 <th>ESTATUS DE LLAMADA</th>
@@ -231,6 +254,7 @@ export default function Gestion() {
                   <td title={f.cliente}>{f.cliente}</td>
                   <td title={f.tipo_credito ?? ''}>{f.tipo_credito}</td>
                   <td>{f.llave_credito}</td>
+                  <td title={f.estado ?? ''}>{f.estado}</td>
                   <td>{f.telefono}</td>
                   <td>{fmtFechaHora(f.fecha_formalizado, tz)}</td>
                   <td>
@@ -247,7 +271,13 @@ export default function Gestion() {
                         <option value="BUZON">BUZON</option>
                         <option value="CONTESTA">CONTESTA</option>
                         {f.estatus_llamada === 'DEVOLVER LLAMADA' && <option value="DEVOLVER LLAMADA" disabled>DEVOLVER LLAMADA</option>}
+                        {f.estatus_llamada === 'CONTESTA' && <option value="CONTESTA" disabled>CONTESTA (en gestión)</option>}
                       </select>
+                      {f.estatus_llamada === 'CONTESTA' && (
+                        <button className="btn secundario mini" disabled={ocupado === f.id} onClick={() => continuar(f)} title="Seguir editando la solicitud guardada sin terminar">
+                          Continuar
+                        </button>
+                      )}
                       {f.estatus_llamada === 'DEVOLVER LLAMADA' && f.devolver_llamada_en && (
                         <span className={`devolver-hora${f.orden_estatus === 0 ? ' ya' : ''}`} title="Hora acordada para devolver la llamada">
                           ⏰ {fmtFechaHora(f.devolver_llamada_en, tz)}

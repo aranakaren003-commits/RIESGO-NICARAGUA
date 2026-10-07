@@ -10,7 +10,7 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
-  groupedOptions?: { categoria: string; opciones: string[] }[] // para selects de dos niveles (p. ej. Queja)
+  opcionesDe?: { campo: FieldKey; mapa: Record<string, string[]> } // lista dependiente: las opciones y la visibilidad salen del valor de otro campo (p. ej. Queja: categoría → detalle)
   source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora; manual = lo ingresa el usuario
   readOnly?: boolean // nunca editable
   fijoEnEdicion?: boolean // editable solo al crear un registro nuevo; fijo al editar uno ya existente (viene de la bitácora)
@@ -24,6 +24,7 @@ export interface FieldGroup {
   fields: FieldDef[]
   aplicaA?: TipoProducto // la sección solo se activa para este tipo de producto
   obligatorioEn?: TipoProducto // los campos de la sección son obligatorios para este tipo de producto
+  obligatorioConAceptacion?: boolean // con estatus ACEPTACION, las preguntas de la sección son obligatorias
 }
 
 // TIPO DE CRÉDITO en la bitácora: 'MOTO', 'PYMES', 'ASALARIADO', etc.
@@ -32,6 +33,8 @@ export function esProducto(tipoCredito: string | null | undefined, tipo: TipoPro
 }
 
 const BMR = ['BUENO', 'REGULAR', 'MALO']
+
+export const SIN_QUEJA = 'Sin Queja'
 
 export const QUEJA_CATEGORIAS: { categoria: string; opciones: string[] }[] = [
   { categoria: 'Cobro', opciones: ['Recordatorios consecutivos de Cobro', 'Llamadas consecutivas de Cobro', 'Mensaje consecutivos de Cobro', 'Otra'] },
@@ -53,6 +56,8 @@ export const QUEJA_CATEGORIAS: { categoria: string; opciones: string[] }[] = [
   { categoria: 'DAC', opciones: ['Motorizado Descortés', 'Analista Descortés', 'Otra'] },
 ]
 
+const QUEJA_MAPA: Record<string, string[]> = Object.fromEntries(QUEJA_CATEGORIAS.map((c) => [c.categoria, c.opciones]))
+
 const f = (
   key: FieldKey,
   col: string,
@@ -63,6 +68,7 @@ const f = (
 ): FieldDef => ({ key, col, label, type, source, ...extra })
 
 export const ESTATUS_LLAMADA = [
+  'CONTESTA',
   'ACEPTACION',
   'NO ACEPTACION',
   'NO CONTESTA',
@@ -110,12 +116,13 @@ export const FIELD_GROUPS: FieldGroup[] = [
     fields: [
       f('tipo_credito', 'L', 'TIPO DE CRÉDITO', 'text', 'bitacora'),
       f('promotor', 'M', 'PROMOTOR', 'text', 'bitacora'),
-      f('categorizacion', 'N', 'CATEGORIZACIÓN', 'text', 'bitacora'),
+      f('categorizacion', 'N', 'CATEGORIZACIÓN', 'select', 'bitacora', { options: ['CREDITO NUEVO', 'REFINANCIAMIENTO'] }),
       f('modalidad', 'O', 'MODALIDAD', 'text', 'bitacora'),
     ],
   },
   {
     title: 'Atención y experiencia del trámite',
+    obligatorioConAceptacion: true,
     fields: [
       f('atencion_tramite', 'P', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÒN O EXPERIENCIA DEL TRAMITE DE CRÉDITO' }),
       f('atencion_ejecutivo', 'Q', 'BUENO ,MALO, REGULAR', 'select', 'manual', { options: BMR, caption: 'ATENCIÒN DEL EJECUTIVO O PROMOTOR DE CRÉDITO' }),
@@ -128,6 +135,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Asistencias, documentación y fechas de pago',
+    obligatorioConAceptacion: true,
     fields: [
       f('conoce_asistencias', 'W', 'SI , NO', 'sino', 'manual', {caption: 'YA CONOCE SOBRE LOS BENEFICIOS ADICIONALES DE NUESTRAS ASISTENCIAS?' }),
       f('ofrecieron_asistencia', 'X', 'SI , NO', 'sino', 'manual', {caption: 'LE OFRECIERON ADQUIRIR ALGUNA ASISTENCIA?' }),
@@ -148,7 +156,9 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Cierre y observaciones',
+    obligatorioConAceptacion: true,
     fields: [
+      f('genero', '', 'GÉNERO', 'select', 'manual', { options: ['MASCULINO', 'FEMENINO'], caption: 'GÉNERO DEL CLIENTE' }),
       f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
       // E-MAIL, SUCURSAL y ORIGEN vienen de la bitácora (Correo_MK, Suc Origen, Medio Captacion); el correo se puede editar, los otros dos no
@@ -166,14 +176,21 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     title: 'Comentario y sospecha',
+    obligatorioConAceptacion: true,
     fields: [
       f('comentario_llamada', 'K', 'COMENTARIO', 'textarea', 'manual'),
       // Si es SI, la línea se resalta en rojo tenue en las tablas y queda disponible para análisis por promotor, canal y solicitud
       f('caso_sospecha', '', 'CASO TIENE SOSPECHA', 'sino', 'manual'),
-      f('queja', '', 'QUEJA', 'select', 'manual', { groupedOptions: QUEJA_CATEGORIAS }),
+      f('queja_categoria', '', 'QUEJA (CATEGORÍA)', 'select', 'manual', { options: [...QUEJA_CATEGORIAS.map((c) => c.categoria), SIN_QUEJA] }),
+      f('queja', '', 'QUEJA (DETALLE)', 'select', 'manual', { opcionesDe: { campo: 'queja_categoria', mapa: QUEJA_MAPA } }),
     ],
   },
 ]
+
+// Con estatus ACEPTACION son obligatorias las preguntas (campos con encabezado de pregunta, sospecha, queja y género); los comentarios libres no.
+const CLAVES_PREGUNTA: FieldKey[] = ['caso_sospecha', 'queja_categoria', 'queja', 'genero']
+export const esPreguntaDeAceptacion = (x: FieldDef): boolean =>
+  x.source === 'manual' && !x.readOnly && x.type !== 'textarea' && (!!x.caption || CLAVES_PREGUNTA.includes(x.key))
 
 export const ALL_FIELDS: FieldDef[] = FIELD_GROUPS.flatMap((g) => g.fields)
 export const MANUAL_FIELDS = ALL_FIELDS.filter((x) => x.source === 'manual')
@@ -188,6 +205,7 @@ export function encuestaProgreso(r: Llamada): { llenos: number; total: number } 
     'caso_sospecha',
     'numero_pertenece_a',
     'queja',
+    'queja_categoria',
   ]
   const campos = MANUAL_FIELDS.filter((x) => !excluidos.includes(x.key))
   const llenos = campos.filter((x) => {

@@ -10,7 +10,6 @@ import GestionNumeroEquivocado from './components/GestionNumeroEquivocado'
 import Registros from './components/Registros'
 import Dashboard from './components/Graficas'
 import Importar from './components/Importar'
-import ImportarCit from './components/ImportarCit'
 import Intentos from './components/Intentos'
 import Administracion from './components/Administracion'
 import CambiarClave from './components/CambiarClave'
@@ -26,7 +25,6 @@ type Vista =
   | 'dashboard'
   | 'intentos'
   | 'importar'
-  | 'importar_cit'
   | 'sospecha'
   | 'numero_equivocado'
   | 'admin'
@@ -42,8 +40,7 @@ const VISTAS: { id: Vista; titulo: string; permiso: string }[] = [
   { id: 'numero_equivocado', titulo: 'Número equivocado', permiso: P.casosNumeroEquivocadoVer },
   { id: 'dashboard', titulo: 'Dashboard', permiso: P.graficasVer },
   { id: 'intentos', titulo: 'Bitácora de cambios de estatus', permiso: P.intentosVer },
-  { id: 'importar', titulo: 'Importar bitácora', permiso: P.bitacoraImportar },
-  { id: 'importar_cit', titulo: 'Importar CIT', permiso: P.citImportar },
+  { id: 'importar', titulo: 'Importar bitácora y CIT', permiso: P.bitacoraImportar },
   { id: 'admin', titulo: 'Administración', permiso: P.adminUsuarios },
   { id: 'vista_previa', titulo: 'Vista de prueba', permiso: P.adminVistaPrevia },
 ]
@@ -206,7 +203,6 @@ export default function App() {
         {actual.id === 'dashboard' && <Dashboard key={pais.id} permisos={permisos} esRegional={esRegional} paises={paises} pais={pais} />}
         {actual.id === 'intentos' && <Intentos key={pais.id} />}
         {actual.id === 'importar' && <Importar key={pais.id} />}
-        {actual.id === 'importar_cit' && <ImportarCit key={pais.id} />}
         {actual.id === 'admin' && <Administracion miId={sesion.user.id} miPerfil={perfil} permisos={permisos} onPaisesCambiaron={cargarPaises} />}
         {actual.id === 'vista_previa' && <VistaPrevia onActivar={activarVistaPrevia} />}
       </main>

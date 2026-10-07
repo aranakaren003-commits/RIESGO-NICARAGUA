@@ -23,6 +23,8 @@ export type Llamada = {
   numero_pertenece_a: string | null
   numero_equivocado_gestionado: boolean
   queja: string | null
+  queja_categoria: string | null
+  genero: string | null
   tipo_credito: string | null
   promotor: string | null
   categorizacion: string | null
@@ -99,7 +101,9 @@ export type VCola = {
   devolver_llamada_en: string | null
   llave_credito: string | null
   intentos: number
-  orden_estatus: number // 0 = devolver llamada vigente, 1 sin asignar, 2 no contesta, 3 buzón, 4 devolver llamada futura
+  orden_estatus: number // 0 = devolver llamada vigente o CONTESTA en gestión, 1 sin asignar, 2 no contesta, 3 buzón, 4 devolver llamada futura
+  estado: string | null
+  numero_solicitud: number
 }
 
 export type Permiso = {
@@ -276,6 +280,7 @@ export type Database = {
       registrar_intento: { Args: { p_id: string; p_resultado: string }; Returns: Json }
       marcar_numero_equivocado_gestionado: { Args: { p_id: string }; Returns: Json }
       revertir_perfil: { Args: { p_user: string }; Returns: undefined }
+      intento_contesta_abierto: { Args: { p_id: string }; Returns: string | null }
       actualizar_intento: { Args: { p_id: string; p_estatus: string }; Returns: undefined }
       crear_carga: { Args: { p_pais: string; p_archivo: string; p_total: number }; Returns: string }
       importar_lote: { Args: { p_carga: string; p_filas: Json }; Returns: number }
