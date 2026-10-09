@@ -61,6 +61,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
 
   // Un campo condicional (p. ej. la fecha para devolver la llamada) solo se muestra cuando otro campo tiene cierto valor
   const visible = (f: FieldDef) =>
+    !(modoDigitador && f.ocultoParaDigitador) &&
     (!f.visibleSi || valores[f.visibleSi.campo] === f.visibleSi.valor) && (!f.opcionesDe || !!f.opcionesDe.mapa[valores[f.opcionesDe.campo]])
 
   const esAceptacion = valores.estatus_llamada === 'ACEPTACION'
@@ -93,7 +94,7 @@ export default function RegistroForm({ registro, idCarga, soloLectura, modoDigit
     for (const g of FIELD_GROUPS) {
       const aplica = !g.aplicaA || esProducto(valores.tipo_credito, g.aplicaA)
       for (const f of g.fields) {
-        if (f.readOnly) continue
+        if (f.readOnly || (modoDigitador && f.ocultoParaDigitador)) continue
         const v = valores[f.key].trim()
         if (!aplica || !visible(f)) payload[f.key] = null // sección que no aplica al producto o campo condicional oculto: se deja vacío
         else if (f.key === 'numero_solicitud') payload[f.key] = solicitud

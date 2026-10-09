@@ -10,6 +10,7 @@ export interface FieldDef {
   caption?: string // encabezado superior del reporte (pregunta), cuando existe
   type: FieldType
   options?: string[]
+  ocultoParaDigitador?: boolean // el Digitador no ve ni captura este campo
   opcionesDe?: { campo: FieldKey; mapa: Record<string, string[]> } // lista dependiente: las opciones y la visibilidad salen del valor de otro campo (p. ej. Queja: categoría → detalle)
   source: 'bitacora' | 'manual' // bitacora = precargado desde la bitácora; manual = lo ingresa el usuario
   readOnly?: boolean // nunca editable
@@ -158,7 +159,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: 'Cierre y observaciones',
     obligatorioConAceptacion: true,
     fields: [
-      f('genero', '', 'GÉNERO', 'select', 'manual', { options: ['MASCULINO', 'FEMENINO'], caption: 'GÉNERO DEL CLIENTE' }),
+      f('genero', '', 'GÉNERO', 'select', 'manual', { options: ['MASCULINO', 'FEMENINO'], caption: 'GÉNERO DEL CLIENTE', ocultoParaDigitador: true }),
       f('pregunta_af', 'AF', 'SI , NO', 'sino', 'manual', { caption: 'RECOMENDARÍA ALGÚN AMIGO,FAMILIAR O CONOCIDO CON INSTACREDIT' }),
       f('comentario_sugerencia', 'AJ', 'COMENTARIO Y SUGERENCIA', 'textarea', 'manual', { caption: 'CLIENTE BRINDA EL COMENTARIO' }),
       // E-MAIL, SUCURSAL y ORIGEN vienen de la bitácora (Correo_MK, Suc Origen, Medio Captacion); el correo se puede editar, los otros dos no

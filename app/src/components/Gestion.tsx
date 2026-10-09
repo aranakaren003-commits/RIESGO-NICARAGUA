@@ -227,21 +227,19 @@ export default function Gestion() {
         <div className="tabla-envoltorio">
           <table className="sin-clic tabla-gestion">
             <colgroup>
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '14%' }} />
               <col style={{ width: '12%' }} />
               <col style={{ width: '10%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '8%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '7%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th>CLIENTE</th>
                 <th>TIPO DE CRÉDITO</th>
                 <th>LLAVE DE CRÉDITO</th>
-                <th>ESTADO</th>
                 <th>TELEFONO</th>
                 <th>FECHA DE FORMALIZADO</th>
                 <th>ESTATUS DE LLAMADA</th>
@@ -254,7 +252,6 @@ export default function Gestion() {
                   <td title={f.cliente}>{f.cliente}</td>
                   <td title={f.tipo_credito ?? ''}>{f.tipo_credito}</td>
                   <td>{f.llave_credito}</td>
-                  <td title={f.estado ?? ''}>{f.estado}</td>
                   <td>{f.telefono}</td>
                   <td>{fmtFechaHora(f.fecha_formalizado, tz)}</td>
                   <td>
